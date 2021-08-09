@@ -1,9 +1,9 @@
 module ElectrostaticPIC1D
 
-using FFTW, LinearAlgebra, Plots, SpecialFunctions
+using FFTW, LinearAlgebra, SpecialFunctions
 
 abstract type AbstractBC end
-abstract type AbstractPeriodicBC <: AsbtractBC end
+abstract type AbstractPeriodicBC <: AbstractBC end
 struct PeriodicParticleBC <: AbstractPeriodicBC end
 
 include("Cells.jl")

@@ -24,11 +24,11 @@ function Base.getindex(p::PeriodicFiniteDifferenceOperator{T}, i, j
   return zero(T)
 end
 
-struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
+struct FiniteDifferenceField{BC<:PeriodicGridBC, T} <: AbstractField{BC}
   charge::DeltaFunctionGrid{BC,T}
   electricfield::DeltaFunctionGrid{BC,T}
-  gradient::PeriodicFiniteDifferenceOperator{T,A}
-  laplace::PeriodicFiniteDifferenceOperator{T,A}
+  gradient::PeriodicFiniteDifferenceOperator{T}
+  laplace::PeriodicFiniteDifferenceOperator{T}
 end
 function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC},
                                accuracy::Int=2)
@@ -41,11 +41,12 @@ end
 
 function solve!(f::FiniteDifferenceField)
   f.electricfield .= f.gradient * (f.charge \ f.laplace)
-  return nothing
+  return f
 end
 
 function update!(f::FiniteDifferenceField, species)
   for particle ∈ species
     deposit!(f.charge, particle)
   end
+  return f
 end

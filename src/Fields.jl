@@ -1,11 +1,13 @@
 using ConcreteStructs
-abstract type AbstractGrid{BC} <: AbstractArray end
+abstract type AbstractGrid{BC} end
 
 # AbstractArray interface
 Base.size(g::AbstractGrid) = g.N
 
 # Periodic BC
-struct PeriodicGridBC <: AsbtractPeriodicBC end
+struct PeriodicGridBC <: AbstractPeriodicBC end
+
+abstract type AbstractField{BC<:AbstractBC} end
 
 include("fields/DiracDeltaGrids.jl")
 include("fields/Fourier.jl")

@@ -1,6 +1,6 @@
 using Memoize, QuadGK
 
-struct LSFEMGrid{BC<:AbstractBC, S::AbstractShape} <: AbstractGrid{BC}
+struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape} <: AbstractGrid{BC}
   N::Int
   L::Float64
   bc::BC

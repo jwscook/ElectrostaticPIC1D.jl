@@ -10,7 +10,7 @@ width(s::GaussianShape) = (-6, 6) .* s.σ
 struct TopHat <: AbstractShape
   fullwidth::Float64
 end
-width(s::HopHat) = s.fullwidth
+width(s::TopHat) = s.fullwidth
 (s::TopHat)(x, centre) = centre - s.fullwidth/2 <= x < centre + s.fullwidth/2
 
 struct DeltaFunction <: AbstractShape end
@@ -33,9 +33,6 @@ function overlap(a::BasisFunction, b::BasisFunction)
   return lower(a) < upper(b) && upper(a) > lower(b)
 end
 
-function BasisFunction(p::Particle{S}) where {S<:AbstractShape}
-  return BasisFunction{S}(shape(p), p.x, 1.0)
-end
 BasisFunction(c::Cell) = BasisFunction(TopHat(width(c)), centre(c))
 
 function integral(p::BasisFunction, limits)

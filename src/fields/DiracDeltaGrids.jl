@@ -25,7 +25,7 @@ Base.in(x::Number, g::DeltaFunctionGrid) = cells(x[1], x[2], g)
 Base.in(x, g::DeltaFunctionGrid) = cells(x[1], x[2], g)
 
 # AbstractArray interface
-Base.size(g::AbstractGrid) = g.N
+Base.size(g::DeltaFunctionGrid) = g.N
 # DeltaFunctionGrid
 Base.getindex(g::DeltaFunctionGrid, i) = g.cells[i]
 Base.setindex!(g::DeltaFunctionGrid, v, i) = (g.cells[i] = v)
