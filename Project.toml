@@ -1,0 +1,4 @@
+name = "ElectrostaticPIC1D"
+uuid = "10ec0e3b-707c-476a-b0b0-4161061aa41d"
+authors = ["James Cook <cookjws@gmail.com>"]
+version = "0.1.0"
