@@ -17,10 +17,10 @@ struct DeltaFunction <: AbstractShape end
 width(s::DeltaFunction) = 0
 (s::DeltaFunction)(x, centre) = x == centre
 
-struct BasisFunction{S<:AbstractShape}
+struct BasisFunction{S<:AbstractShape, T}
   shape::S
   centre::Float64
-  weight::Float64
+  weight::T
 end
 lower(b::BasisFunction) = b.centre - width(b.shape) / 2
 upper(b::BasisFunction) = b.centre + width(b.shape) / 2

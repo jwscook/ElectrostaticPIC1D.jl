@@ -1,10 +1,10 @@
 using Memoize, QuadGK
 
-struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape} <: AbstractGrid{BC}
+struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
   L::Float64
   bc::BC
-  bases::Vector{BasisFunction{S}}
+  bases::Vector{BasisFunction{S, T}}
 end
 Base.size(f::LSFEMGrid) = f.N
 Base.iterate(f::LSFEMGrid) = iterate(f.bases)

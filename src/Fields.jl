@@ -1,5 +1,5 @@
 using ConcreteStructs
-abstract type AbstractGrid{BC} end
+abstract type AbstractGrid{BC,T} <: AbstractVector{T} end
 
 # AbstractArray interface
 Base.size(g::AbstractGrid) = g.N

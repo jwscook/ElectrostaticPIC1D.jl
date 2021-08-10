@@ -9,7 +9,8 @@ struct PeriodicParticleBC <: AbstractPeriodicBC end
 include("BasisFunctions.jl")
 include("Particles.jl")
 include("Fields.jl")
-export DeltaFunctionGrid, PeriodicGridBC, FourierField
+export DeltaFunctionGrid, PeriodicGridBC
+export FourierField, FiniteDifferenceField, LSFEMField
 export cellcentres, solve!
 
 struct Species{S<:AbstractShape}

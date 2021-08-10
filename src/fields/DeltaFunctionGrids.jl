@@ -1,5 +1,5 @@
 
-struct DeltaFunctionGrid{BC<:AbstractBC, T} <: AbstractGrid{BC}
+struct DeltaFunctionGrid{BC<:AbstractBC, T} <: AbstractGrid{BC, T}
   N::Int
   L::Float64
   values::Vector{T}
@@ -11,10 +11,6 @@ function DeltaFunctionGrid(N::Int, L::Real, ::Type{BC}=PeriodicGridBC,
 end
 Base.length(g::DeltaFunctionGrid) = g.N
 Base.ndims(::Type{DeltaFunctionGrid{BC, T}}) where {BC<:AbstractBC, T} = 1
-function Base.isapprox(g::DeltaFunctionGrid, x; kwargs...)
-  return ≈(g.values, x; kwargs...)
-end
-
 
 cellcentres(g::DeltaFunctionGrid) = ((1:g.N) .- 0.5) * cellwidth(g)
 cellwidth(g::DeltaFunctionGrid) = g.L / g.N
@@ -28,18 +24,10 @@ end
 Base.in(x::Number, g::DeltaFunctionGrid) = cells(x, g)
 Base.in(x, g::DeltaFunctionGrid) = cells(x[1], x[2], g)
 
-function Base.copyto!(g::DeltaFunctionGrid, v)
-  for (i, vi) ∈ enumerate(v)
-    g[i] = vi
-  end
-  return g
-end
-
 # AbstractArray interface
 Base.size(g::DeltaFunctionGrid) = (g.N,)
 # DeltaFunctionGrid
 Base.getindex(g::DeltaFunctionGrid, i) = g.values[i]
-Base.setindex!(g::DeltaFunctionGrid, v::Real, i) = (g.values[i] = v)
 Base.setindex!(g::DeltaFunctionGrid, v, i) = (g.values[i] = v)
 Base.iterate(g::DeltaFunctionGrid) = iterate(g.values)
 Base.iterate(g::DeltaFunctionGrid, state) = iterate(g.values, state)
