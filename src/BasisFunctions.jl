@@ -33,7 +33,7 @@ function overlap(a::BasisFunction, b::BasisFunction)
   return lower(a) < upper(b) && upper(a) > lower(b)
 end
 
-BasisFunction(c::Cell) = BasisFunction(TopHat(width(c)), centre(c))
+BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
 
 function integral(p::BasisFunction, limits)
   lower, upper = limits

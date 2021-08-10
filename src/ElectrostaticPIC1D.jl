@@ -6,7 +6,6 @@ abstract type AbstractBC end
 abstract type AbstractPeriodicBC <: AbstractBC end
 struct PeriodicParticleBC <: AbstractPeriodicBC end
 
-include("Cells.jl")
 include("BasisFunctions.jl")
 include("Particles.jl")
 include("Fields.jl")

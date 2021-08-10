@@ -10,9 +10,9 @@
 
     charge .= rho
     ff = FourierField(charge::DeltaFunctionGrid{PeriodicGridBC})
-    @test ff.charge ≈ rho
+    @test ff.charge ≈ rho atol=10eps()
     solve!(ff)
-    @test ff.electricfield ≈ efield
+    @test ff.electricfield ≈ efield atol=100eps()
   end
 
 end

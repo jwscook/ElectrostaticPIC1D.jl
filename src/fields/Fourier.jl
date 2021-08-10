@@ -24,7 +24,7 @@ function FourierField(charge::DeltaFunctionGrid{PeriodicGridBC})
 end
 
 function solve!(f::FourierField)
-  f.helper.workvector .= value.(f.charge)
+  f.helper.workvector .= f.charge
   fft!(f.helper.workvector)
   f.helper.workvector ./= f.helper.ik
   f.helper.workvector[1] *= false
