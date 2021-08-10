@@ -9,7 +9,7 @@ struct PeriodicGridBC <: AbstractPeriodicBC end
 
 abstract type AbstractField{BC<:AbstractBC} end
 
-include("fields/DiracDeltaGrids.jl")
+include("fields/DeltaFunctionGrids.jl")
 include("fields/Fourier.jl")
 include("fields/FiniteDifference.jl")
 include("fields/FiniteElement.jl")

@@ -10,6 +10,8 @@ include("Cells.jl")
 include("BasisFunctions.jl")
 include("Particles.jl")
 include("Fields.jl")
+export DeltaFunctionGrid, PeriodicGridBC, FourierField
+export cellcentres, solve!
 
 struct Species{S<:AbstractShape}
   particles::Vector{Particle{S}}
