@@ -40,17 +40,6 @@ struct PeriodicFiniteIntegratorOperator{A,T} <: Function #AbstractMatrix{T}
 end
 Base.eltype(p::PeriodicFiniteIntegratorOperator{A,T}) where {A,T} = T 
 Base.size(p::PeriodicFiniteIntegratorOperator) = (p.N, p.N)
-#function Base.getindex(p::PeriodicFiniteIntegratorOperator{1,T},
-#                       I::Vararg{Int, 2}) where {T}
-#  i, j = I
-#  return j > i ? zero(T) : p.Δ
-#end
-#function Base.getindex(p::PeriodicFiniteIntegratorOperator{2,T},
-#                       I::Vararg{Int, 2}) where {T}
-#  i, j = I
-#  i == 1 && (j == 1 || j == p.N) && return p.Δ / 2
-#  return j > i ? zero(T) : p.Δ
-#end
 demean!(x) = (x .-= mean(x); x)
 function (p::PeriodicFiniteIntegratorOperator{1})(z, y)
   z .= cumsum(y) * p.Δ
@@ -75,8 +64,6 @@ end
 struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
   charge::DeltaFunctionGrid{BC,T}
   electricfield::DeltaFunctionGrid{BC,T}
-#  gradient::PeriodicFiniteDifferenceOperator{T}
-  #laplace::PeriodicFiniteIntegratorOperator{T}
   integrator::PeriodicFiniteIntegratorOperator{A,T}
 end
 function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC},
@@ -84,8 +71,6 @@ function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC},
   electricfield = deepcopy(charge)
   zero!(electricfield)
   N = first(size(charge))
-#  gradient = PeriodicFiniteDifferenceOperator(N, charge.L, 1, accuracy)
-  #laplace = PeriodicFiniteIntegratorOperator(N, charge.L, 2, accuracy)
   integrator = PeriodicFiniteIntegratorOperator(N, charge.L, accuracy)
   return FiniteDifferenceField(charge, electricfield, integrator)
 end
