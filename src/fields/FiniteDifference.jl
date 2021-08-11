@@ -1,4 +1,4 @@
-using NumericalIntegration, Statistics
+using Statistics, Memoization
 
 struct PeriodicFiniteDifferenceOperator{T} <: AbstractMatrix{T}
   N::Int
@@ -34,29 +34,45 @@ struct PeriodicFiniteIntegratorOperator{A,T} <: Function #AbstractMatrix{T}
   Δ::T
   function PeriodicFiniteIntegratorOperator(N::Int, L::T, accuracy::Int=2) where {T}
     Δ = L / N
-    1 <= accuracy <=2 || throw(ArgumentError("accuracy must be between 1 & 2"))
     return new{accuracy,T}(N, Δ)
   end
 end
 Base.eltype(p::PeriodicFiniteIntegratorOperator{A,T}) where {A,T} = T 
 Base.size(p::PeriodicFiniteIntegratorOperator) = (p.N, p.N)
 demean!(x) = (x .-= mean(x); x)
+@memoize polymatrix(N) = lu(hcat([(0:N-1).^i for i in 0:N-1]...))
+function integratepoly(y, a, b) # TODO calculate coefficients and not do this
+  N = length(y)
+  N > 8 && throw(error("length of y is too large, gives badly conditioned matrix"))
+  coeffs = polymatrix(N) \ y
+  coeffs ./= 1:N
+  push!(coeffs, 0.0)
+  coeffs[2:end] .= coeffs[1:end-1]
+  coeffs[1] = 0.0
+  return sum(coeffs .* b.^(0:N)) - sum(coeffs .* a.^(0:N))
+end
 function (p::PeriodicFiniteIntegratorOperator{1})(z, y)
-  z .= cumsum(y) * p.Δ
+  z[1] = y[1]/2 * p.Δ
+  for i ∈ 2:length(z)
+    z[i] = z[i-1] + y[i] * p.Δ
+  end
   return demean!(z) 
 end
 function (p::PeriodicFiniteIntegratorOperator{2})(z, y)
-#  z .= cumul_integrate(p.Δ/2:p.Δ:p.N*p.Δ, y, TrapezoidalEven())
-  z[1] = (y[end]/4 + y[1]/2 + y[2]/4) * p.Δ
-  for i in 2:length(z)-1
-    z[i] = z[i-1] + (y[i-1]/4 + y[i]/2 + y[i+1]/4) * p.Δ
+  z[1] = (y[end]/4 + 3y[1]/4) * p.Δ
+  for i in 2:length(z)
+    z[i] = z[i-1] + (y[i-1] + y[i])/2 * p.Δ
   end
-  z[end] = z[end-1] + (y[end]/4 + y[1]/2 + y[2]/4) * p.Δ
   return demean!(z) 
 end
-function (p::PeriodicFiniteIntegratorOperator{3})(z, y)
-  z .= cumul_integrate(p.Δ/2:p.Δ:p.N*p.Δ, y, SimpsonEven())
-  return demean!(z) 
+function (p::PeriodicFiniteIntegratorOperator{4})(z, y)
+  z[1] = integratepoly([y[end-1], y[end], y[1], y[2]], 1.5, 2)
+  z[2] = z[1] + integratepoly([y[end], y[1], y[2], y[3]], 1, 2)
+  for i in 3:length(z)-1
+    z[i] = z[i-1] + integratepoly([y[i-2], y[i-1], y[i], y[i+1]], 1, 2)
+  end
+  z[end] = z[end-1] + integratepoly([y[end-2], y[end-1], y[end], y[1]], 1, 2)
+  return demean!(z) * p.Δ
 end
 (p::PeriodicFiniteIntegratorOperator{A,T})(y) where {A,T} = p(deepcopy(y), y)
 
@@ -66,7 +82,7 @@ struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
   electricfield::DeltaFunctionGrid{BC,T}
   integrator::PeriodicFiniteIntegratorOperator{A,T}
 end
-function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC},
+function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC};
                                accuracy::Int=2)
   electricfield = deepcopy(charge)
   zero!(electricfield)
@@ -74,6 +90,8 @@ function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC},
   integrator = PeriodicFiniteIntegratorOperator(N, charge.L, accuracy)
   return FiniteDifferenceField(charge, electricfield, integrator)
 end
+
+accuracy(f::FiniteDifferenceField{BC,T,A}) where {BC,T,A} = A
 
 function solve!(f::FiniteDifferenceField)
   f.electricfield .= f.integrator(f.charge)

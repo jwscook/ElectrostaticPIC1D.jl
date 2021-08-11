@@ -1,4 +1,4 @@
-using ConcreteStructs
+using ConcreteStructs, Memoization
 abstract type AbstractGrid{BC,T} <: AbstractVector{T} end
 
 # AbstractArray interface

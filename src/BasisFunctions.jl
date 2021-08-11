@@ -1,4 +1,4 @@
-using Memoize, SpecialFunctions
+using Memoization, SpecialFunctions
 
 abstract type AbstractShape end
 struct GaussianShape <: AbstractShape

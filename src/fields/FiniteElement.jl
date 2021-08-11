@@ -1,4 +1,4 @@
-using Memoize, QuadGK
+using Memoization, QuadGK
 
 struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
