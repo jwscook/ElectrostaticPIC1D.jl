@@ -2,16 +2,15 @@ module ElectrostaticPIC1D
 
 using FFTW, LinearAlgebra, SpecialFunctions
 
-abstract type AbstractBC end
-abstract type AbstractPeriodicBC <: AbstractBC end
-struct PeriodicParticleBC <: AbstractPeriodicBC end
+include("BoundaryConditions.jl")
 
 include("BasisFunctions.jl")
+export GaussianShape, TopHat, DeltaFunction
 include("Particles.jl")
 include("Fields.jl")
 export DeltaFunctionGrid, PeriodicGridBC
-export FourierField, FiniteDifferenceField, LSFEMField
-export cellcentres, solve!
+export FourierField, FiniteDifferenceField, LSFEMField, LSFEMGrid
+export cellcentres, solve!, update!
 
 struct Species{S<:AbstractShape}
   particles::Vector{Particle{S}}

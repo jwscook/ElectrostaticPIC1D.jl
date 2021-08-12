@@ -44,11 +44,8 @@ demean!(x) = (x .-= mean(x); x)
 function integratepoly(y, a, b) # TODO calculate coefficients and not do this
   N = length(y)
   N > 8 && throw(error("length of y is too large, gives badly conditioned matrix"))
-  coeffs = polymatrix(N) \ y
-  coeffs ./= 1:N
-  push!(coeffs, 0.0)
-  coeffs[2:end] .= coeffs[1:end-1]
-  coeffs[1] = 0.0
+  coeffs = zeros(N+1)
+  coeffs[2:end] = (polymatrix(N) \ y) ./ (1:N)
   return sum(coeffs .* b.^(0:N)) - sum(coeffs .* a.^(0:N))
 end
 function (p::PeriodicFiniteIntegratorOperator{1})(z, y)
@@ -65,11 +62,23 @@ function (p::PeriodicFiniteIntegratorOperator{2})(z, y)
   end
   return demean!(z) 
 end
+# this operator is 4th order accurate despite using a 3 point stencil
+function (p::PeriodicFiniteIntegratorOperator{3})(z, y)
+  fill!(z, 0)
+  z[1] = integratepoly([y[end], y[1], y[2]], 0.5, 1)
+  z[2] = integratepoly([y[end], y[1], y[2]], 1, 1.5)
+  for i in 2:length(z)-1
+    z[i] += z[i-1] + integratepoly(y[i-1:i+1], 0.5, 1)
+    z[i+1] += integratepoly(y[i-1:i+1], 1, 1.5)
+  end
+  z[end] += z[end-1] + integratepoly([y[end-1], y[end], y[1]], 0.5, 1)
+  return demean!(z) * p.Δ
+end
 function (p::PeriodicFiniteIntegratorOperator{4})(z, y)
   z[1] = integratepoly([y[end-1], y[end], y[1], y[2]], 1.5, 2)
   z[2] = z[1] + integratepoly([y[end], y[1], y[2], y[3]], 1, 2)
   for i in 3:length(z)-1
-    z[i] = z[i-1] + integratepoly([y[i-2], y[i-1], y[i], y[i+1]], 1, 2)
+    z[i] = z[i-1] + integratepoly(y[i-2:i+1], 1, 2)
   end
   z[end] = z[end-1] + integratepoly([y[end-2], y[end-1], y[end], y[1]], 1, 2)
   return demean!(z) * p.Δ

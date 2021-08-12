@@ -26,7 +26,7 @@ numtests = 10
 end
 
 @testset "FiniteDifference fields" begin
-  data = Dict(1=>[], 2=>[], 4=>[])
+  data = Dict(1=>[], 2=>[], 3=>[], 4=>[])
   for i in 1:8
     N, L, efield, rho, A = setup(N=2^(i+3), n=1, A=1)
     charge = DeltaFunctionGrid(N, L)
@@ -48,9 +48,26 @@ end
   for accuracy in keys(data)
     cellsizes = [1 ./i[1] for i in data[accuracy]]
     errors = [i[2] for i in data[accuracy]]
-    # fit log10(errors) = p *log10(h) + c
+    # fit log10(errors) = p *log10(cellsizes) + c because ϵ ∝ hᵖ
     p, c = hcat(log10.(cellsizes), ones(length(cellsizes))) \ log10.(errors)
-    @test p ≈ accuracy rtol=0.001
+    @test (p > accuracy*0.99)
+  end
+end
+
+@testset "LSFEM fields" begin
+  for i in 1:numtests
+    N, L, efield, rho, A = setup()
+    charge = LSFEMGrid(N, L, GaussianShape)
+    x = ((1:N) .- 0.5) ./ N * L
+    efieldexpected = efield.(x)
+    rhoexpected = rho.(x)
+    update!(charge, rho)
+    f = LSFEMField(charge)
+    fieldcharge = f.charge.(x)
+    @test fieldcharge ≈ rhoexpected atol=10eps()
+  #  solve!(f)
+  #  fieldelectricfield = f.electricfield.(x)
+  #  @test fieldelectricfield ≈ efieldexpected atol=10eps() rtol=sqrt(eps())
   end
 end
 

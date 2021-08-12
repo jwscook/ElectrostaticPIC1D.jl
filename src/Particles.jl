@@ -4,7 +4,9 @@ struct Nuclide
   numberdensity::Float64
 end
 
-mutable struct Particle{S<:AbstractShape, BC<:AbstractBC}
+abstract type AbstractParticle end
+
+mutable struct Particle{S<:AbstractShape, BC<:AbstractBC} <: AbstractParticle
   nuclide::Nuclide
   x::Float64
   v::Float64
