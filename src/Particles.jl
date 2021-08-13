@@ -17,21 +17,9 @@ end
 
 weight(p::Particle) = p.weight
 shape(p::Particle) = p.shape
-support(p::Particle{DeltaFunction}) = (p.x, p.x)
-support(p::Particle{TopHat}) = p.x .+ (-1/2, 1/2) .* p.shape.fullwidth
-support(p::Particle{GaussianShape}) = p.x .+ (-6, 6) .* p.shape.σ
-
 
 function BasisFunction(p::Particle{S}) where {S<:AbstractShape}
   return BasisFunction{S}(shape(p), p.x, 1.0)
 end
 
-function charge(p::Particle, limits)
-  return integral(BasisFunction(tophat(limits[2] - limits[2]), mean(limits)),
-                  BasisFunction(particle))
-end
-
-function charge(b::BasisFunction, p::Particle, _=nothing)
-  return integral(b, BasisFunction(particle))
-end
 

@@ -39,7 +39,6 @@ struct PeriodicFiniteIntegratorOperator{A,T} <: Function #AbstractMatrix{T}
 end
 Base.eltype(p::PeriodicFiniteIntegratorOperator{A,T}) where {A,T} = T 
 Base.size(p::PeriodicFiniteIntegratorOperator) = (p.N, p.N)
-demean!(x) = (x .-= mean(x); x)
 @memoize polymatrix(N) = lu(hcat([(0:N-1).^i for i in 0:N-1]...))
 function integratepoly(y, a, b) # TODO calculate coefficients and not do this
   N = length(y)

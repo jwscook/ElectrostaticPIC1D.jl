@@ -7,18 +7,51 @@ end
 width(s::GaussianShape) = 12 .* s.σ
 (s::GaussianShape)(x, centre) = exp(-(x-centre)^2 / s.σ^2) / √π / s.σ
 
-struct TopHat <: AbstractShape
-  fullwidth::Float64
+struct BSpline{N} <: AbstractShape
+  Δ::Float64
 end
-width(s::TopHat) = s.fullwidth
-function (s::TopHat)(x, centre)
-  return (centre - s.fullwidth/2 <= x < centre + s.fullwidth/2) / s.fullwidth
-end
+width(s::BSpline{N}) where N = (N+1) * s.Δ
 
-struct DeltaFunction <: AbstractShape end
-DeltaFunction(_) = DeltaFunction() # so has same ctor as others
-width(s::DeltaFunction) = 0
-(s::DeltaFunction)(x, centre) = x == centre
+function (s::BSpline{0})(x, centre)
+  return (-s.Δ/2 <= x - centre < s.Δ/2) / s.Δ
+end
+const TopHatShape = BSpline{0}
+
+function (s::BSpline{1})(x, centre)
+  z = 2 * (x - centre + 1 * s.Δ) / width(s) # z is between 0 and 2
+  value = if 0 <= z < 1
+    z
+  elseif 1 <= z < 2
+    (2 - z)
+  else
+    zero(z)
+  end
+  return value / s.Δ
+end
+const TentShape = BSpline{1}
+
+function (s::BSpline{2})(x, centre)
+  z = 3 * (x - centre + 1.5 * s.Δ) / width(s) # z is between 0 and 3
+  value = if 0 <= z < 1
+    z^2
+  elseif 1 <= z < 2
+    3/4 - (1.5 - z)^2
+  elseif 2 <= z < 3
+    (3 - z)^2
+  else
+    zero(z)
+  end
+  return value / s.Δ * 3 / 4
+end
+const QuadraticBSplineShape = BSpline{2}
+
+
+
+
+struct DeltaFunctionShape <: AbstractShape end
+DeltaFunctionShape(_) = DeltaFunctionShape() # so has same ctor as others
+width(s::DeltaFunctionShape) = 0
+(s::DeltaFunctionShape)(x, centre) = x == centre
 
 mutable struct BasisFunction{S<:AbstractShape, T}
   shape::S
@@ -33,7 +66,11 @@ upper(a::T, b::T) where {T<:BasisFunction} = min(upper(a), upper(b))
 width(b::BasisFunction) = width(b.shape)
 weight(b::BasisFunction) = b.weight
 centre(b::BasisFunction) = b.centre
-function translate(b::BasisFunction, x)
+function getkey(u::BasisFunction, v::BasisFunction)::UInt64
+  hashtuple = (width(u), width(v), trunc((centre(u) - centre(v)), digits=14))
+  return foldr(hash, hashtuple; init=hash(typeof(u), hash(typeof(v))))
+end
+function translate(b::BasisFunction, x::Number)
   translated = deepcopy(b)
   translated.centre += x
   return translated
@@ -43,6 +80,16 @@ Base.:*(x, b::BasisFunction) = x * b.weight
 Base.:*(b::BasisFunction, x) = x * b.weight
 zero!(b::BasisFunction) = (b.weight *= false)
 Base.in(x, b::BasisFunction) = (b.centre - width(b)/2 <= x < b.centre + width(b)/2)
+
+function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
+    p::PeriodicBCHandler) where {S1<:AbstractShape, S2<:AbstractShape}
+  in(a, b) && return (a, b)
+  in(translate(a, length(p)), b) && return (translate(a, length(p)), b)
+  in(translate(a,-length(p)), b) && return (translate(a,-length(p)), b)
+  #in(a, translate(b, length(p))) && return (a, translate(b, length(p)))
+  #in(a, translate(b,-length(p))) && return (a, translate(b,-length(p)))
+  return (a, b)
+end
 
 (b::BasisFunction)(x) = b.shape(x, b.centre)
 function (b::BasisFunction)(x, p::PeriodicBCHandler)
@@ -76,22 +123,22 @@ function integral(a::BasisFunction{S1},
   in(a, b) && return integral(a, b)
   in(translate(a, length(p)), b) && return integral(translate(a, length(p)), b)
   in(translate(a,-length(p)), b) && return integral(translate(a,-length(p)), b)
-  in(a, translate(b, length(p))) && return integral(a, translate(b, length(p)))
-  in(a, translate(b,-length(p))) && return integral(a, translate(b,-length(p)))
+#  in(a, translate(b, length(p))) && return integral(a, translate(b, length(p)))
+#  in(a, translate(b,-length(p))) && return integral(a, translate(b,-length(p)))
   return 0.0
 end
 
 function integral(a::BasisFunction{GaussianShape},
-                  b::BasisFunction{TopHat})
+                  b::BasisFunction{TopHatShape})
   return (erf(-(a.centre - upper(b)) / a.shape.σ) -
           erf(-(a.centre - lower(b)) / a.shape.σ))/2
 end
-function integral(a::BasisFunction{TopHat},
-                  b::BasisFunction{TopHat})
+function integral(a::BasisFunction{TopHatShape},
+                  b::BasisFunction{TopHatShape})
   return (min(upper(a), upper(b)) - max(lower(a), lower(b))) * overlap(a, b)
 end
-integral(a::BasisFunction{DeltaFunction}, b::BasisFunction) = b(a.centre)
-integral(a::BasisFunction, b::BasisFunction{DeltaFunction}) = a(b.centre)
+integral(a::BasisFunction{DeltaFunctionShape}, b::BasisFunction) = b(a.centre)
+integral(a::BasisFunction, b::BasisFunction{DeltaFunctionShape}) = a(b.centre)
 
 function integral(a::BasisFunction{GaussianShape},
                   b::BasisFunction{GaussianShape})

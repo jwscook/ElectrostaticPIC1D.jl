@@ -9,6 +9,8 @@ struct PeriodicGridBC <: AbstractPeriodicBC end
 
 abstract type AbstractField{BC<:AbstractBC} end
 
+demean!(x) = (x .-= mean(x); x)
+
 include("fields/DeltaFunctionGrids.jl")
 include("fields/Fourier.jl")
 include("fields/FiniteDifference.jl")

@@ -5,7 +5,7 @@ using FFTW, LinearAlgebra, SpecialFunctions
 include("BoundaryConditions.jl")
 
 include("BasisFunctions.jl")
-export GaussianShape, TopHat, DeltaFunction
+export BSpline, GaussianShape, TentShape, TopHatShape, DeltaFunctionShape
 include("Particles.jl")
 include("Fields.jl")
 export DeltaFunctionGrid, PeriodicGridBC

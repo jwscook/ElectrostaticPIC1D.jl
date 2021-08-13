@@ -1,4 +1,4 @@
-using ForwardDiff, Memoization, QuadGK, SparseArrays
+using ForwardDiff, JLD2, Memoization, QuadGK, SparseArrays, Base.Threads, ThreadsX
 
 struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
@@ -11,6 +11,7 @@ function LSFEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
 end
 function LSFEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
     ) where {BC<:AbstractBC, S<:AbstractShape}
+  S <: GaussianShape && @assert N >= 12
   Δ = L / N
   bases = [BasisFunction(shape, (i-0.5) * Δ) for i ∈ 1:N]
   return LSFEMGrid{BC,S,Float64}(N, L, bases)
@@ -53,11 +54,13 @@ upper(l::LSFEMGrid) = l.L
 function update!(l::LSFEMGrid, f::F) where {F}
   p = PeriodicBCHandler(0.0, l.L)
   A = zeros(length(l), length(l))
-  for (i, u) in enumerate(l), (j, v) in enumerate(l)
-    A[i, j] = v(centre(u),p)
+  ThreadsX.foreach(enumerate(l)) do (j, v)
+    for (i, u) in enumerate(l)
+      A[i, j] = v(centre(u),p)
+    end
   end
   b = zeros(length(l))
-  for (j, v) in enumerate(l)
+  ThreadsX.foreach(enumerate(l)) do (j, v)
     b[j] = f(centre(v))
   end
   x = A \ b
@@ -65,28 +68,32 @@ function update!(l::LSFEMGrid, f::F) where {F}
     @assert weight(l.bases[i]) == 0
     l.bases[i] += x[i]
   end
-  return l, A, b, x
+  return l
 end
 
 
-struct LSFEMField{BC<:PeriodicGridBC, S<:AbstractShape, T} <: AbstractField{BC}
+struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractField{BC}
   charge::LSFEMGrid{BC,S,T}
   electricfield::LSFEMGrid{BC,S,T}
+  function LSFEMField(charge::L, electricfield::L
+      ) where {BC,S,T,L<:LSFEMGrid{BC,S,T}}
+    @assert charge.N == electricfield.N
+    @assert charge.L == electricfield.L
+    return new{BC,S,T}(charge, electricfield)
+  end
 end
 LSFEMField(a::LSFEMGrid) = LSFEMField(a, deepcopy(a))
 Base.size(l::LSFEMField) = (size(l.charge),)
 Base.length(l::LSFEMField) = l.charge.N
 
 lower(l::LSFEMField) = 0.0
-upper(l::LSFEMField) = (@assert l.charge.L == l.electricfield.L; l.charge.L)
-
-@memoize union(f::LSFEMField, b::BasisFunction) = filter(i->overlap(i, b), f.bases)
+upper(l::LSFEMField) = l.charge.L
 
 function deposit!(f::LSFEMField, particle::AbstractParticle)
-  for bases ∈ union(f, BasisFunction(particle))
+  for bases ∈ (BasisFunction(particle) ∈ f)
     for basis ∈ bases
       basis += integral(BasisFunction(particle), basis) * particle.charge *
-      particle.weight
+        particle.weight
     end
   end
 end
@@ -97,35 +104,59 @@ function update!(f::LSFEMField, species)
   end
 end
 
-function solve!(f::LSFEMField)
-  @memoize gausslawsolve(f) = massmatrix(f) \
-    Matrix(normalisedstiffnessmatrix(f)) # shouldn't need to convert to dense
-  f.electricfield .= (gausslawsolve(f) * f.charge)
-end
+@memoize gausslawsolve(f) = massmatrix(f) \
+  Matrix(normalisedstiffnessmatrix(f)) # shouldn't need to convert to dense
 
-@memoize function massmatrix(f::LSFEMField{PeriodicGridBC})
-  p = PeriodicBCHandler(lower(f), upper(f))
-  M = spzeros(length(f), length(f))
-  for (j, v) ∈ enumerate(f.electricfield), (i, u) ∈ enumerate(f.electricfield)
-    M[i, j] = QuadGK.quadgk(x̄->(x = p(x̄); 
-      ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x)),
-      lower(u, v), upper(u, v))[1]
+postsolve!(x, ::Type{AbstractBC}) = x
+postsolve!(x, ::Type{PeriodicGridBC}) = demean!(x)
+function solve!(f::LSFEMField{BC, S}) where {BC, S}
+  A = try
+    gausslawsolve(f)
+  catch err
+    M = massmatrix(f)
+    K = Matrix(normalisedstiffnessmatrix(f))
+    @save "solve!_$(S)_$(f.charge.N).jld2" f err
+    @warn "Caugh $err, saved matrices, and exiting."
+    rethrow()
   end
-  return M
-end
-weights(f) = [weight(i) for i in f]
-function stiffnessmatrix(f::LSFEMField)
-  return normalisedstiffnessmatrix(f) * weights(f)
+  f.electricfield .= postsolve!(A * f.charge, BC)
+  return f
 end
 
+function massmatrixintegrand(u, v, cache)
+  return get!(()->QuadGK.quadgk(
+    x->ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x),
+    lower(u, v), upper(u, v), rtol=10eps())[1], cache, getkey(u, v))
+end
+@memoize function massmatrix(f::LSFEMField)
+  return matrix(f.electricfield, f.electricfield, massmatrixintegrand)
+end
 @memoize function normalisedstiffnessmatrix(f::LSFEMField)
-  p = PeriodicBCHandler(lower(f), upper(f))
-  K = spzeros(length(f), length(f))
-  for (j, v) ∈ enumerate(f.charge), (i, u) ∈ enumerate(f.electricfield)
-    K[i, j] = QuadGK.quadgk(x̄->(x = p(x̄);
-      ForwardDiff.derivative(u, x) * v(x)),
-      lower(u, v), upper(u, v))[1]
+  return matrix(f.charge, f.charge, stiffnessmatrixintegrand)
+end
+function stiffnessmatrix(f::LSFEMField)
+  return normalisedstiffnessmatrix(f) * weight.(f.charge)
+end
+function stiffnessmatrixintegrand(u, v, cache)
+  return get!(()->QuadGK.quadgk(
+    x->ForwardDiff.derivative(u, x) * v(x),
+    lower(u, v), upper(u, v), rtol=10eps())[1], cache, getkey(u, v))
+end
+
+function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integrand::F
+               ) where {BC<:PeriodicGridBC, F}
+  p = PeriodicBCHandler(lower(a), upper(a))
+  A = spzeros(length(a), length(a))
+  caches = [IdDict{UInt64,Any}() for _ ∈ 1:Threads.nthreads()]
+  foreach(enumerate(b)) do (j, v̄)
+    cache = caches[Threads.threadid()]
+    for (i, ū) ∈ enumerate(a)
+      u, v = translate(ū, v̄, p)
+#      (j-1 <= i <= j+ 1) && @show i, j, u, v
+      u ∈ v || continue
+      A[i, j] = integrand(u, v, cache)
+    end
   end
-  return K
+  return A
 end
 

@@ -55,19 +55,23 @@ end
 end
 
 @testset "LSFEM fields" begin
-  for i in 1:numtests
-    N, L, efield, rho, A = setup()
-    charge = LSFEMGrid(N, L, GaussianShape)
-    x = ((1:N) .- 0.5) ./ N * L
-    efieldexpected = efield.(x)
-    rhoexpected = rho.(x)
-    update!(charge, rho)
-    f = LSFEMField(charge)
-    fieldcharge = f.charge.(x)
-    @test fieldcharge ≈ rhoexpected atol=10eps()
-  #  solve!(f)
-  #  fieldelectricfield = f.electricfield.(x)
-  #  @test fieldelectricfield ≈ efieldexpected atol=10eps() rtol=sqrt(eps())
+  for i in 1:4
+    N, L, efield, rho, A = setup(N=2^(i+4), n=1)
+    for shape ∈ (BSpline{1}, BSpline{2}, GaussianShape)
+      charge = LSFEMGrid(N, L, shape)
+      x = ((1:N) .- 0.5) ./ N * L
+      efieldexpected = efield.(x)
+      rhoexpected = rho.(x)
+      update!(charge, rho)
+      f = LSFEMField(charge)
+      fieldcharge = f.charge.(x)
+      @test fieldcharge ≈ rhoexpected atol=0 rtol=100eps()
+      solve!(f)
+      efieldresult = f.electricfield.(x)
+      nrm = norm(efieldresult .- efieldexpected) ./ norm(efieldexpected)
+      @test nrm ≈ 0 atol=1e-4 rtol=0
+      @show shape, N, nrm
+    end
   end
 end
 
