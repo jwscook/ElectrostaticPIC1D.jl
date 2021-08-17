@@ -17,8 +17,8 @@ function LSFEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
   bases = [BasisFunction(shape, (i-0.5) * Δ) for i ∈ 1:N]
   return LSFEMGrid{BC,S,Float64}(N, L, bases)
 end
-function (l::LSFEMGrid{PeriodicGridBC})(x)
-  sum(i(x, PeriodicBCHandler(0.0, l.L)) * weight(i) for i ∈ l)
+function (l::LSFEMGrid{BC})(x) where {BC}
+  sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
 end
 Base.size(f::LSFEMGrid) = (f.N,)
 Base.iterate(f::LSFEMGrid) = iterate(f.bases)
@@ -34,8 +34,8 @@ zero!(f) = map(zero!, f)
 lower(l::LSFEMGrid) = 0.0
 upper(l::LSFEMGrid) = l.L
 
-#function update!(l::LSFEMGrid, f::F) where {F}
-#  p = PeriodicBCHandler(lower(l), upper(l))
+#function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
+#  p = BC(lower(l), upper(l))
 #  zero!(l)
 #  A = zeros(length(l), length(l))
 #  for (j, v) ∈ enumerate(l.bases), (i, u) ∈ enumerate(l.bases)
@@ -52,8 +52,8 @@ upper(l::LSFEMGrid) = l.L
 #  end
 #  return l
 #end
-function update!(l::LSFEMGrid, f::F) where {F}
-  p = PeriodicBCHandler(0.0, l.L)
+function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
+  p = BC(0.0, l.L)
   A = zeros(length(l), length(l))
   ThreadsX.foreach(enumerate(l)) do (j, v)
     for (i, u) in enumerate(l)
@@ -192,7 +192,7 @@ end
 
 function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integral::F
                ) where {BC<:PeriodicGridBC, F}
-  p = PeriodicBCHandler(lower(a), upper(a))
+  p = BC(lower(a), upper(a))
   A = spzeros(length(a), length(a))
   caches = [IdDict{UInt64,Any}() for _ ∈ 1:Threads.nthreads()]
   foreach(enumerate(b)) do (j, v̄)

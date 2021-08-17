@@ -7,7 +7,7 @@ struct DeltaFunctionGrid{BC<:AbstractBC, T} <: AbstractGrid{BC, T}
 end
 function DeltaFunctionGrid(N::Int, L::Real, ::Type{BC}=PeriodicGridBC,
    ::Type{T}=Float64) where {BC<:AbstractBC, T<:Number}
-  return DeltaFunctionGrid{BC,T}(N, L, zeros(T, N), BC())
+  return DeltaFunctionGrid{BC,T}(N, L, zeros(T, N), BC(0.0, L))
 end
 Base.length(g::DeltaFunctionGrid) = g.N
 Base.ndims(::Type{DeltaFunctionGrid{BC, T}}) where {BC<:AbstractBC, T} = 1

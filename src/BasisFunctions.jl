@@ -88,7 +88,7 @@ zero!(b::BasisFunction) = (b.weight *= false)
 Base.in(x, b::BasisFunction) = (b.centre - width(b)/2 <= x < b.centre + width(b)/2)
 
 function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
-    p::PeriodicBCHandler) where {S1<:AbstractShape, S2<:AbstractShape}
+    p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
   in(a, b) && return (a, b)
   in(translate(a, length(p)), b) && return (translate(a, length(p)), b)
   in(translate(a,-length(p)), b) && return (translate(a,-length(p)), b)
@@ -96,7 +96,7 @@ function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
 end
 
 (b::BasisFunction)(x) = b.shape(x, b.centre)
-function (b::BasisFunction)(x, p::PeriodicBCHandler)
+function (b::BasisFunction)(x, p::PeriodicGridBC)
   in(x, b) && return b(x)
   in(x, translate(b, length(p))) && return translate(b, length(p))(x)
   in(x, translate(b,-length(p))) && return translate(b,-length(p))(x)
@@ -111,7 +111,7 @@ Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 
 BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
 
-function integral(b::BasisFunction, f, _::PeriodicBCHandler) where {F}
+function integral(b::BasisFunction, f, _::AbstractBC) where {F}
   return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b))[1]
 end
 
@@ -123,12 +123,10 @@ end
 
 function integral(a::BasisFunction{S1},
                   b::BasisFunction{S2},
-                  p::PeriodicBCHandler) where {S1<:AbstractShape, S2<:AbstractShape}
+                  p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
   in(a, b) && return integral(a, b)
   in(translate(a, length(p)), b) && return integral(translate(a, length(p)), b)
   in(translate(a,-length(p)), b) && return integral(translate(a,-length(p)), b)
-#  in(a, translate(b, length(p))) && return integral(a, translate(b, length(p)))
-#  in(a, translate(b,-length(p))) && return integral(a, translate(b,-length(p)))
   return 0.0
 end
 

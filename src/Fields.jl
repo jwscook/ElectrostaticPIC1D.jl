@@ -1,11 +1,8 @@
 using ConcreteStructs, Memoization
 abstract type AbstractGrid{BC,T} <: AbstractVector{T} end
 
-# AbstractArray interface
+# AbstractArray interface, the rest are in the specific files below
 Base.size(g::AbstractGrid) = g.N
-
-# Periodic BC
-struct PeriodicGridBC <: AbstractPeriodicBC end
 
 abstract type AbstractField{BC<:AbstractBC} end
 
