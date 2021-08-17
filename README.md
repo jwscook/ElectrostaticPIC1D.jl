@@ -16,8 +16,8 @@ The plan is implement:
  - Field Solvers
    - [x] Finite difference
    - [x] Least square finite element
-   - [ ] mixed finite element
-   - [ ] Fourier (but not fully-Spectral)
+   - [ ] Mixed finite element
+   - [x] Fourier (but not fully-Spectral)
 
  - Time integrators
    - [ ] Verlet (leap-frog)
