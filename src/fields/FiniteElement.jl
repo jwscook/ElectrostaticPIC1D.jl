@@ -134,16 +134,15 @@ Other solution methods are eigen decomposition (n^3) and regularisation.
     o = fft(b) ./ c
     o[1] *= false # don't divide by zero
     return real.(ifft(o))
+  elseif rank(Matrix(A)) == size(A, 1) # is non-singular
+    return demean!(A \ b)
   else
-    return demean!(Matrix(A) \ b) # works only with noisy, slightly non-symmetric, A
+    u, v = eigen(Matrix(A))
+    idu = 1 ./ u
+    idu[end] *= false # just like ignoring 0th Fourier mode?
+    A⁻¹ = real.(v * diagm(idu) * inv(v))
+    return demean!(A⁻¹ * b)
   end
-
-#  u, v = eigen(Matrix(A))
-#  idu = 1 ./ u
-#  idu[end] *= false # just like ignoring 0th Fourier mode?
-#  A⁻¹ = real.(v * diagm(idu) * inv(v))
-#  return A⁻¹ * b
-
 end
 @memoize function gausslawsolve(f::LSFEMField{BC}) where {BC}
   A = massmatrix(f)
