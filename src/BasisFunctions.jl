@@ -1,16 +1,24 @@
-using Memoization, SpecialFunctions, Setfield
+using Memoization, SpecialFunctions
 
 abstract type AbstractShape end
 struct GaussianShape <: AbstractShape
   σ::Float64
+  function GaussianShape(σ)
+    σ > 0 || throw(error(ArgumentError("GuassianShape σ must be > 0 but is $σ")))
+    return new(σ)
+  end
 end
-width(s::GaussianShape) = 12 .* s.σ
+width(s::GaussianShape) = 13 .* s.σ
 (s::GaussianShape)(x, centre) = exp(-(x-centre)^2 / s.σ^2) / √π / s.σ
 
 struct BSpline{N} <: AbstractShape
   Δ::Float64
+  function BSpline{N}(Δ) where {N}
+    Δ > 0 || throw(error(ArgumentError("BSpline{$N} Δ must be > 0 but is $Δ")))
+    return new{N}(Δ)
+  end
 end
-width(s::BSpline{N}) where N = (N+1) * s.Δ
+width(s::BSpline{N}) where N = (N + 1) * s.Δ
 
 function (s::BSpline{0})(x, centre)
   return (-s.Δ/2 <= x - centre < s.Δ/2) / s.Δ
@@ -33,19 +41,17 @@ const TentShape = BSpline{1}
 function (s::BSpline{2})(x, centre)
   z = 3 * (x - centre + 1.5 * s.Δ) / width(s) # z is between 0 and 3
   value = if 0 <= z < 1
-    z^2
+    z^2 / 2
   elseif 1 <= z < 2
     3/4 - (1.5 - z)^2
   elseif 2 <= z < 3
-    (3 - z)^2
+    (3 - z)^2 / 2
   else
     zero(z)
   end
-  return value / s.Δ * 3 / 4
+  return value / s.Δ
 end
 const QuadraticBSplineShape = BSpline{2}
-
-
 
 
 struct DeltaFunctionShape <: AbstractShape end
@@ -86,8 +92,6 @@ function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
   in(a, b) && return (a, b)
   in(translate(a, length(p)), b) && return (translate(a, length(p)), b)
   in(translate(a,-length(p)), b) && return (translate(a,-length(p)), b)
-  #in(a, translate(b, length(p))) && return (a, translate(b, length(p)))
-  #in(a, translate(b,-length(p))) && return (a, translate(b,-length(p)))
   return (a, b)
 end
 

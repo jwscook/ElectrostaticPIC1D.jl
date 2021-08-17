@@ -6,6 +6,7 @@ include("BoundaryConditions.jl")
 
 include("BasisFunctions.jl")
 export BSpline, GaussianShape, TentShape, TopHatShape, DeltaFunctionShape
+export BasisFunction
 include("Particles.jl")
 include("Fields.jl")
 export DeltaFunctionGrid, PeriodicGridBC

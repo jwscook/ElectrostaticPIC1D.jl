@@ -1,4 +1,5 @@
-using ForwardDiff, JLD2, Memoization, QuadGK, SparseArrays, Base.Threads, ThreadsX
+using ForwardDiff, IterativeSolvers, JLD2, Memoization, Preconditioners
+using QuadGK, SparseArrays, Base.Threads, ThreadsX, ToeplitzMatrices
 
 struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
@@ -104,46 +105,92 @@ function update!(f::LSFEMField, species)
   end
 end
 
-@memoize gausslawsolve(f) = massmatrix(f) \
-  Matrix(normalisedstiffnessmatrix(f)) # shouldn't need to convert to dense
+
+# Pull a special trick to solve circulant matrix that pops out of periodic BCs
+"""
+    gausslawsolve(f::LSFEMField{PeriodicGridBC})
+
+Solve Gauss's law to obtain the electric field from the charge
+The periodic boundary condition creates a circulant Symmetric matrix,
+which can be solved via FFTs (n log n).
+
+Other solution methods are eigen decomposition (n^3) and regularisation.
+
+...
+# Arguments
+- `field::LSFEMField{PeriodicGridBC}`: 
+...
+
+# Example
+```julia
+```
+"""
+@memoize function gausslawsolve(field::LSFEMField{PeriodicGridBC})
+  A = massmatrix(field)
+  b = forcevector(field)
+  if Circulant(A) ≈ A
+    c = fft(A[:, 1])
+    c[1] = 1 # 1st mode (eigenvalue) is zero
+    o = fft(b) ./ c
+    o[1] *= false # don't divide by zero
+    return real.(ifft(o))
+  else
+    return demean!(Matrix(A) \ b) # works only with noisy, slightly non-symmetric, A
+  end
+
+#  u, v = eigen(Matrix(A))
+#  idu = 1 ./ u
+#  idu[end] *= false # just like ignoring 0th Fourier mode?
+#  A⁻¹ = real.(v * diagm(idu) * inv(v))
+#  return A⁻¹ * b
+
+end
+@memoize function gausslawsolve(f::LSFEMField{BC}) where {BC}
+  A = massmatrix(f)
+  b = forcevector(f)
+  p = AMGPreconditioner{SmoothedAggregation}(A)
+  return IterativeSolvers.cg(A, b, Pl=p)
+end
 
 postsolve!(x, ::Type{AbstractBC}) = x
 postsolve!(x, ::Type{PeriodicGridBC}) = demean!(x)
 function solve!(f::LSFEMField{BC, S}) where {BC, S}
-  A = try
+  x = try
     gausslawsolve(f)
   catch err
-    M = massmatrix(f)
-    K = Matrix(normalisedstiffnessmatrix(f))
+    A = massmatrix(f)
+    b = forcevector(f)
     @save "solve!_$(S)_$(f.charge.N).jld2" f err
-    @warn "Caugh $err, saved matrices, and exiting."
+    @warn "Caught $err, saved matrices, and exiting."
     rethrow()
   end
-  f.electricfield .= postsolve!(A * f.charge, BC)
+  f.electricfield .= postsolve!(x, BC)
   return f
 end
 
-function massmatrixintegrand(u, v, cache)
+function massmatrixintegral(u, v, cache)
   return get!(()->QuadGK.quadgk(
     x->ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x),
-    lower(u, v), upper(u, v), rtol=10eps())[1], cache, getkey(u, v))
-end
-@memoize function massmatrix(f::LSFEMField)
-  return matrix(f.electricfield, f.electricfield, massmatrixintegrand)
-end
-@memoize function normalisedstiffnessmatrix(f::LSFEMField)
-  return matrix(f.charge, f.charge, stiffnessmatrixintegrand)
-end
-function stiffnessmatrix(f::LSFEMField)
-  return normalisedstiffnessmatrix(f) * weight.(f.charge)
-end
-function stiffnessmatrixintegrand(u, v, cache)
-  return get!(()->QuadGK.quadgk(
-    x->ForwardDiff.derivative(u, x) * v(x),
-    lower(u, v), upper(u, v), rtol=10eps())[1], cache, getkey(u, v))
+    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
 end
 
-function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integrand::F
+@memoize function massmatrix(f::LSFEMField)
+  return Symmetric(matrix(f.electricfield, f.electricfield,
+                          massmatrixintegral))
+end
+@memoize function normalisedstiffnessmatrix(f::LSFEMField)
+  return matrix(f.charge, f.charge, stiffnessmatrixintegral)
+end
+function forcevector(f::LSFEMField)
+  return normalisedstiffnessmatrix(f) * weight.(f.charge)
+end
+function stiffnessmatrixintegral(u, v, cache)
+  return get!(()->QuadGK.quadgk(
+    x->ForwardDiff.derivative(u, x) * v(x),
+    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
+end
+
+function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integral::F
                ) where {BC<:PeriodicGridBC, F}
   p = PeriodicBCHandler(lower(a), upper(a))
   A = spzeros(length(a), length(a))
@@ -152,9 +199,8 @@ function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integrand::F
     cache = caches[Threads.threadid()]
     for (i, ū) ∈ enumerate(a)
       u, v = translate(ū, v̄, p)
-#      (j-1 <= i <= j+ 1) && @show i, j, u, v
       u ∈ v || continue
-      A[i, j] = integrand(u, v, cache)
+      A[i, j] = integral(u, v, cache)
     end
   end
   return A
