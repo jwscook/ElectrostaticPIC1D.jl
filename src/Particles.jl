@@ -1,22 +1,19 @@
 struct Nuclide
   charge::Float64
   mass::Float64
-  numberdensity::Float64
 end
 
 abstract type AbstractParticle end
 
-mutable struct Particle{S<:AbstractShape, BC<:AbstractBC} <: AbstractParticle
+mutable struct Particle{S<:AbstractShape} <: AbstractParticle
   nuclide::Nuclide
   x::Float64
   v::Float64
-  weight::Float64
-  shape::S
-  bc::BC
+  basis::BasisFunction{S}
 end
 
-weight(p::Particle) = p.weight
-shape(p::Particle) = p.shape
+weight(p::Particle) = p.basis.weight
+shape(p::Particle) = p.basis.shape
 
 function BasisFunction(p::Particle{S}) where {S<:AbstractShape}
   return BasisFunction{S}(shape(p), p.x, 1.0)

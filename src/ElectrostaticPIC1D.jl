@@ -8,6 +8,7 @@ include("BasisFunctions.jl")
 export BSpline, GaussianShape, TentShape, TopHatShape, DeltaFunctionShape
 export BasisFunction
 include("Particles.jl")
+export AbstractParticle, Nuclide, Particle
 include("Fields.jl")
 export DeltaFunctionGrid, PeriodicGridBC
 export FourierField, FiniteDifferenceField, LSFEMField, LSFEMGrid
