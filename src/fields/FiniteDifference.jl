@@ -106,9 +106,3 @@ function solve!(f::FiniteDifferenceField)
   return f
 end
 
-function update!(f::FiniteDifferenceField, species)
-  for particle ∈ species
-    deposit!(f.charge, particle)
-  end
-  return f
-end

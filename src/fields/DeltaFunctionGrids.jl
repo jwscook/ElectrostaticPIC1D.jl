@@ -12,17 +12,22 @@ end
 Base.length(g::DeltaFunctionGrid) = g.N
 Base.ndims(::Type{DeltaFunctionGrid{BC, T}}) where {BC<:AbstractBC, T} = 1
 
-cellcentres(g::DeltaFunctionGrid) = ((1:g.N) .- 0.5) * cellwidth(g)
+cellcentre(g::DeltaFunctionGrid, i::Integer) = (i - 0.5) * cellwidth(g)
+cellcentres(g::DeltaFunctionGrid) = (cellcentre(g, i) for i ∈ 1:g.N)
 cellwidth(g::DeltaFunctionGrid) = g.L / g.N
 cell(x, g::DeltaFunctionGrid) = Int(round(x / cellwidth(g)))
-cell(p::Particle, g::DeltaFunctionGrid) = cell(p.x, g)
-#celledges(x, g::DeltaFunctionGrid) = cell(x, g) .+ (-1/2, 1/2) .* cellwidth(g)
-cells(ab, g::DeltaFunctionGrid) = cells(ab..., g)
-function cells(a, b, g::DeltaFunctionGrid)
+cellindices(ab, g::DeltaFunctionGrid) = cellindices(ab..., g)
+function cellindices(a, b, g::DeltaFunctionGrid)
   return Int(floor(a / cellwidth(g))):Int(ceil(b / cellwidth(g)))
 end
-Base.in(x::Number, g::DeltaFunctionGrid) = cells(x, g)
-Base.in(x, g::DeltaFunctionGrid) = cells(x[1], x[2], g)
+function basisfunctions(inds, g::DeltaFunctionGrid)
+end
+Base.in(x::Number, g::DeltaFunctionGrid) = basisfunctions(cellindices(x, g), g)
+function Base.union(x, g::DeltaFunctionGrid)
+  t = TopHatShape(cellwidth(g))
+  inds = cellindices(lower(x), upper(x), g)
+  return (BasisFunction(t, cellcentre(g, i)) for i ∈ inds)
+end
 
 # AbstractArray interface
 Base.size(g::DeltaFunctionGrid) = (g.N,)
@@ -33,10 +38,4 @@ Base.iterate(g::DeltaFunctionGrid) = iterate(g.values)
 Base.iterate(g::DeltaFunctionGrid, state) = iterate(g.values, state)
 
 zero!(g::DeltaFunctionGrid) = (g.values .*= false)
-function deposit!(g::DeltaFunctionGrid, particle) where {F}
-  for cell ∈ cells(support(particle), g)
-    cell += weight(particle) * charge(particle, cell) * particle.weight
-  end
-  return nothing
-end
 

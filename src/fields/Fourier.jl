@@ -32,3 +32,8 @@ function solve!(f::FourierField)
   return nothing
 end
 
+Base.getindex(g::FourierField, i) = g.values[i]
+Base.setindex!(g::FourierField, v, i) = (g.values[i] = v)
+Base.iterate(g::FourierField) = iterate(g.values)
+Base.iterate(g::FourierField, state) = iterate(g.values, state)
+

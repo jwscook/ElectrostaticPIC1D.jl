@@ -90,8 +90,8 @@ Base.in(x, b::BasisFunction) = (b.centre - width(b)/2 <= x < b.centre + width(b)
 function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
     p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
   in(a, b) && return (a, b)
-  in(translate(a, length(p)), b) && return (translate(a, length(p)), b)
-  in(translate(a,-length(p)), b) && return (translate(a,-length(p)), b)
+  t = translate(a, length(p)); in(t, b) && return (t, b)
+  t = translate(a,-length(p)); in(t, b) && return (t, b)
   return (a, b)
 end
 
@@ -124,10 +124,8 @@ end
 function integral(a::BasisFunction{S1},
                   b::BasisFunction{S2},
                   p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
-  in(a, b) && return integral(a, b)
-  in(translate(a, length(p)), b) && return integral(translate(a, length(p)), b)
-  in(translate(a,-length(p)), b) && return integral(translate(a,-length(p)), b)
-  return 0.0
+  a, b = translate(a, b, p)
+  return in(a, b) ? integral(a, b) : 0.0
 end
 
 function integral(a::BasisFunction{GaussianShape},

@@ -1,5 +1,3 @@
-using ForwardDiff, IterativeSolvers, JLD2, Memoization, Preconditioners
-using QuadGK, SparseArrays, Base.Threads, ThreadsX, ToeplitzMatrices
 
 struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
@@ -24,6 +22,7 @@ Base.size(f::LSFEMGrid) = (f.N,)
 Base.iterate(f::LSFEMGrid) = iterate(f.bases)
 Base.iterate(f::LSFEMGrid, state) = iterate(f.bases, state)
 Base.getindex(l::LSFEMGrid, i) = l.bases[i]
+
 function Base.setindex!(l::LSFEMGrid, v, i)
   zero!(l.bases[i])
   l.bases[i] += v
@@ -65,9 +64,8 @@ function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
     b[j] = f(centre(v))
   end
   x = A \ b
-  for i ∈ eachindex(x)
-    @assert weight(l.bases[i]) == 0
-    l.bases[i] += x[i]
+  @avx for i ∈ eachindex(x)
+    setindex!(l, x[i], i)
   end
   return l
 end
@@ -85,26 +83,10 @@ struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractField{BC}
 end
 LSFEMField(a::LSFEMGrid) = LSFEMField(a, deepcopy(a))
 Base.size(l::LSFEMField) = (size(l.charge),)
-Base.length(l::LSFEMField) = l.charge.N
+Base.length(l::LSFEMField) = length(l.charge)
 
 lower(l::LSFEMField) = 0.0
 upper(l::LSFEMField) = l.charge.L
-
-function deposit!(f::LSFEMField, particle::AbstractParticle)
-  for bases ∈ (BasisFunction(particle) ∈ f)
-    for basis ∈ bases
-      basis += integral(BasisFunction(particle), basis) * particle.charge *
-        particle.weight
-    end
-  end
-end
-
-function update!(f::LSFEMField, species)
-  for particle ∈ species
-    deposit!(f, particle)
-  end
-end
-
 
 # Pull a special trick to solve circulant matrix that pops out of periodic BCs
 """
@@ -192,16 +174,17 @@ end
 function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integral::F
                ) where {BC<:PeriodicGridBC, F}
   p = BC(lower(a), upper(a))
-  A = spzeros(length(a), length(a))
+  As = [spzeros(length(a), length(a)) for _ ∈ 1:Threads.nthreads()]
   caches = [IdDict{UInt64,Any}() for _ ∈ 1:Threads.nthreads()]
   foreach(enumerate(b)) do (j, v̄)
     cache = caches[Threads.threadid()]
+    A = As[Threads.threadid()]
     for (i, ū) ∈ enumerate(a)
       u, v = translate(ū, v̄, p)
       u ∈ v || continue
       A[i, j] = integral(u, v, cache)
     end
   end
-  return A
+  return sum(As)
 end
 

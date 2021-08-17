@@ -1,10 +1,14 @@
+
 struct Nuclide
   charge::Float64
   mass::Float64
+  charge_over_mass::Float64
+  Nuclide(q, m) = new(q, m, q / m)
 end
 
-charge(n::Nuclide) = charge(n.charge)
-mass(n::Nuclide) = mass(n.mass)
+charge(n::Nuclide) = n.charge
+mass(n::Nuclide) = n.mass
+charge_mass_ratio(n::Nuclide) = n.charge_over_mass
 
 abstract type AbstractParticle end
 
@@ -18,13 +22,41 @@ function Particle(n::Nuclide, b::BasisFunction{S}=DeltaFunctionShape) where {S}
   return Particle(n, b, 0.0, 0.0)
 end
 
-weight(p::Particle) = p.basis.weight
-shape(p::Particle) = p.basis.shape
-charge(p::Particle) = charge(p.nuclide)
-mass(p::Particle) = mass(p.nuclide)
+Base.position(p::Particle) = p.x
+velocity(p::Particle) = p.v
+basis(p::Particle) = p.basis
 
-function BasisFunction(p::Particle{S}) where {S<:AbstractShape}
-  return BasisFunction{S}(shape(p), p.x, 1.0)
+for op ∈ (:weight, :lower, :upper)
+  @eval $op(p::Particle) = $op(p.basis)
 end
+for op ∈ (:mass, :charge, :charge_mass_ratio)
+  @eval $op(p::Particle) = $op(p.nuclide)
+end
+
+pushposition!(p::Particle, dt) = (p.x += p.v * dt; p)
+pushvelocity!(p::Particle, E, dt) = (p.v += charge_mass_ratio(p) * E * dt; p)
+Base.push!(p::Particle, E, dt) = (pushposition!(p, dt); pushvelocity!(p, E, dt); p)
+
+BasisFunction(p::Particle) = p.basis
+
+function Base.getindex(p::Particle, i)
+  i == 1 && return lower(p)
+  i == 2 && return upper(p)
+  throw(BoundsError("getindex(::Particle, 1) returns the lower extent of the
+                    particle's basis function, and getindex(::Particle, 2)
+                    returns the upper extent. 
+                    Index requested is $i."))
+end
+
+function deposit!(obj, particle)
+  # loop over all items in obj that particle overlaps with
+  for item ∈ union(particle, obj)
+    @show item, particle
+    item += integral(item, basis(particle)) * charge(particle) * weight(particle)
+  end
+  return obj
+end
+
+
 
 
