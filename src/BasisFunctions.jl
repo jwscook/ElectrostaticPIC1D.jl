@@ -10,6 +10,7 @@ struct GaussianShape <: AbstractShape
 end
 width(s::GaussianShape) = 13 .* s.σ
 (s::GaussianShape)(x, centre) = exp(-(x-centre)^2 / s.σ^2) / √π / s.σ
+knots(s::GaussianShape) = (0, width(s))
 
 struct BSpline{N} <: AbstractShape
   Δ::Float64
@@ -53,6 +54,7 @@ function (s::BSpline{2})(x, centre)
 end
 const QuadraticBSplineShape = BSpline{2}
 
+knots(b::BSpline{N}) where N = 0:width(b)/(N + 1):width(b)
 
 struct DeltaFunctionShape <: AbstractShape end
 DeltaFunctionShape(_) = DeltaFunctionShape() # so has same ctor as others
@@ -87,6 +89,18 @@ Base.:*(b::BasisFunction, x) = x * b.weight
 zero!(b::BasisFunction) = (b.weight *= false)
 Base.in(x, b::BasisFunction) = (b.centre - width(b)/2 <= x < b.centre + width(b)/2)
 
+function knots(a::BasisFunction, b::BasisFunction)
+  output = Vector{Float64}()
+  overlap(a, b) || return output
+  ka = knots(shape(a)) .+ lower(a)
+  kb = knots(shape(b)) .+ lower(b)
+  lo = max(a[1], b[1])
+  hi = min(a[end], b[end])
+  push!(output, filter(x->lo <= x < hi, ka)...)
+  push!(output, filter(x->lo <= x < hi, kb)...)
+  return output
+end
+
 function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
     p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
   in(a, b) && return (a, b)
@@ -115,8 +129,19 @@ function integral(b::BasisFunction, f, _::AbstractBC) where {F}
   return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b))[1]
 end
 
-function integral(b::BasisFunction, limits::Union{Tuple, AbstractVector})
-  lower, upper = limits
+function integral(a::BasisFunction{BSpline{N1}}, b::BasisFunction{BSpline{N2}}
+    ) where {N1, N2}
+  # TODO replace with cheaper gauss quadrature given known polynomial order
+  return QuadGK.quadgk(x->b(x) * f(x), knots(a, b)..., order=N1 * N2)[1]
+end
+function integral(a::BasisFunction{GaussianShape}, b::BasisFunction{BSpline})
+  return QuadGK.quadgk(x->b(x) * f(x), lower(a, b), upper(a, b))[1]
+end
+integral(a::BasisFunction{BSpline}, b::BasisFunction{GaussianShape}) = integral(b, a)
+
+
+function integral(b::BasisFunction, lims::Union{Tuple, AbstractVector})
+  lower, upper = lims
   @assert lower < upper
   return integral(b, lower, upper)[1]
 end
@@ -128,8 +153,10 @@ function integral(a::BasisFunction{S1},
   return in(a, b) ? integral(a, b) : 0.0
 end
 
-function integral(a::BasisFunction{GaussianShape},
-                  b::BasisFunction{TopHatShape})
+function integral(a::BasisFunction{TopHatShape}, b::BasisFunction{GaussianShape})
+  return integral(b, a)
+end
+function integral(a::BasisFunction{GaussianShape}, b::BasisFunction{TopHatShape})
   return (erf(-(a.centre - upper(b)) / a.shape.σ) -
           erf(-(a.centre - lower(b)) / a.shape.σ))/2
 end
