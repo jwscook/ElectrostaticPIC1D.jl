@@ -25,6 +25,7 @@ end
 Base.position(p::Particle) = p.x
 velocity(p::Particle) = p.v
 basis(p::Particle) = p.basis
+centre(p::Particle) = centre(basis(p))
 
 for op ∈ (:weight, :lower, :upper)
   @eval $op(p::Particle) = $op(p.basis)
@@ -48,11 +49,17 @@ function Base.getindex(p::Particle, i)
                     Index requested is $i."))
 end
 
-function deposit!(obj, particle)
+overlap(b::BasisFunction, p::Particle) = overlap(b, basis(p))
+
+function deposit!(obj::AbstractGrid{BC}, particle) where {BC<:AbstractBC}
   # loop over all items in obj that particle overlaps with
-  for item ∈ union(particle, obj)
-    @show item, particle
-    item += integral(item, basis(particle)) * charge(particle) * weight(particle)
+  bc = BC(0.0, obj.L)
+  @show intersect(particle, obj, bc)
+  for item ∈ intersect(particle, obj, bc)
+    amount = integral(item, basis(particle), bc) * charge(particle) * weight(particle)
+    @show item, particle, amount
+    @show overlap(item, basis(particle))
+    item += amount
   end
   return obj
 end

@@ -1,4 +1,4 @@
-using Memoization, SpecialFunctions
+using FastGaussQuadrature, Memoization, SpecialFunctions
 
 abstract type AbstractShape end
 struct GaussianShape <: AbstractShape
@@ -10,7 +10,7 @@ struct GaussianShape <: AbstractShape
 end
 width(s::GaussianShape) = 13 .* s.σ
 (s::GaussianShape)(x, centre) = exp(-(x-centre)^2 / s.σ^2) / √π / s.σ
-knots(s::GaussianShape) = (0, width(s))
+knots(s::GaussianShape) = 0:1
 
 struct BSpline{N} <: AbstractShape
   Δ::Float64
@@ -54,7 +54,7 @@ function (s::BSpline{2})(x, centre)
 end
 const QuadraticBSplineShape = BSpline{2}
 
-knots(b::BSpline{N}) where N = 0:width(b)/(N + 1):width(b)
+knots(b::BSpline{N}) where N = 0:1/(N + 1):1
 
 struct DeltaFunctionShape <: AbstractShape end
 DeltaFunctionShape(_) = DeltaFunctionShape() # so has same ctor as others
@@ -69,11 +69,13 @@ end
 BasisFunction(s::AbstractShape, centre) = BasisFunction(s, centre, 0.0)
 lower(b::BasisFunction) = b.centre - width(b.shape) / 2
 upper(b::BasisFunction) = b.centre + width(b.shape) / 2
-lower(a::T, b::T) where {T<:BasisFunction} = max(lower(a), lower(b))
-upper(a::T, b::T) where {T<:BasisFunction} = min(upper(a), upper(b))
+lower(a::BasisFunction, b::BasisFunction) = max(lower(a), lower(b))
+upper(a::BasisFunction, b::BasisFunction) = min(upper(a), upper(b))
 width(b::BasisFunction) = width(b.shape)
 weight(b::BasisFunction) = b.weight
 centre(b::BasisFunction) = b.centre
+shape(b::BasisFunction) = b.shape
+knots(b::BasisFunction) = knots(shape(b)) .* width(b) .+ lower(b)
 function getkey(u::BasisFunction, v::BasisFunction)::UInt64
   hashtuple = (width(u), width(v), trunc((centre(u) - centre(v)), digits=14))
   return foldr(hash, hashtuple; init=hash(typeof(u), hash(typeof(v))))
@@ -92,12 +94,14 @@ Base.in(x, b::BasisFunction) = (b.centre - width(b)/2 <= x < b.centre + width(b)
 function knots(a::BasisFunction, b::BasisFunction)
   output = Vector{Float64}()
   overlap(a, b) || return output
-  ka = knots(shape(a)) .+ lower(a)
-  kb = knots(shape(b)) .+ lower(b)
-  lo = max(a[1], b[1])
-  hi = min(a[end], b[end])
-  push!(output, filter(x->lo <= x < hi, ka)...)
-  push!(output, filter(x->lo <= x < hi, kb)...)
+  ka = knots(a)
+  kb = knots(b)
+  lo = max(ka[1], kb[1])
+  hi = min(ka[end], kb[end])
+  push!(output, filter(x->lo <= x <= hi, ka)...)
+  push!(output, filter(x->lo <= x <= hi, kb)...)
+  output = unique(output)
+  sort!(output)
   return output
 end
 
@@ -126,43 +130,61 @@ Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
 
 function integral(b::BasisFunction, f, _::AbstractBC) where {F}
-  return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b))[1]
+  return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b);
+                       order=27, atol=eps(), rtol=eps())[1]
 end
 
-function integral(a::BasisFunction{BSpline{N1}}, b::BasisFunction{BSpline{N2}}
+function integral(u::BasisFunction{BSpline{N1}}, v::BasisFunction{BSpline{N2}}
     ) where {N1, N2}
-  # TODO replace with cheaper gauss quadrature given known polynomial order
-  return QuadGK.quadgk(x->b(x) * f(x), knots(a, b)..., order=N1 * N2)[1]
+  output = 0.0
+  kn = knots(u, v)
+  x, w = FastGaussQuadrature.gausslegendre((N1 + 1) * (N2 + 1))
+  for i ∈ 1:length(kn)-1
+    a, b = kn[i], kn[i+1]
+    for j ∈ eachindex(x)
+      xj = (x[j] + 1) / 2 * (b - a) + a
+      wj = w[j] / 2 * (b - a)
+      output += wj * u(xj) * v(xj)
+    end
+  end
+  return output
 end
-function integral(a::BasisFunction{GaussianShape}, b::BasisFunction{BSpline})
-  return QuadGK.quadgk(x->b(x) * f(x), lower(a, b), upper(a, b))[1]
+function integral(u::BasisFunction{GaussianShape, T1},
+                  v::BasisFunction{BSpline{N}, T2}) where {T1, N, T2}
+  return QuadGK.quadgk(x->u(x) * v(x), lower(u), upper(v);
+                       order=27, atol=eps(), rtol=eps())[1]
 end
-integral(a::BasisFunction{BSpline}, b::BasisFunction{GaussianShape}) = integral(b, a)
+function integral(u::BasisFunction{BSpline{N}, T1},
+                  v::BasisFunction{GaussianShape, T2}) where {N, T1, T2}
+  return integral(v, u)
+end
 
 
-function integral(b::BasisFunction, lims::Union{Tuple, AbstractVector})
+function integral(u::BasisFunction, lims::Union{Tuple, AbstractVector})
   lower, upper = lims
   @assert lower < upper
-  return integral(b, lower, upper)[1]
+  return integral(u, lower, upper)[1]
 end
 
-function integral(a::BasisFunction{S1},
-                  b::BasisFunction{S2},
+function integral(u::BasisFunction{S1},
+                  v::BasisFunction{S2},
                   p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
-  a, b = translate(a, b, p)
-  return in(a, b) ? integral(a, b) : 0.0
+  u, v = translate(u, v, p)
+  return in(u, v) ? integral(u, v) : 0.0
 end
 
-function integral(a::BasisFunction{TopHatShape}, b::BasisFunction{GaussianShape})
-  return integral(b, a)
+function integral(u::BasisFunction{TopHatShape}, v::BasisFunction{GaussianShape})
+  return integral(v, u)
 end
-function integral(a::BasisFunction{GaussianShape}, b::BasisFunction{TopHatShape})
-  return (erf(-(a.centre - upper(b)) / a.shape.σ) -
-          erf(-(a.centre - lower(b)) / a.shape.σ))/2
+function integral(u::BasisFunction{GaussianShape}, v::BasisFunction{TopHatShape})
+  return (erf(-(u.centre - upper(v)) / u.shape.σ) -
+          erf(-(u.centre - lower(v)) / u.shape.σ)) / 2 / width(v)
 end
-function integral(a::BasisFunction{TopHatShape},
-                  b::BasisFunction{TopHatShape})
-  return (min(upper(a), upper(b)) - max(lower(a), lower(b))) * overlap(a, b)
+function integral(u::BasisFunction{TopHatShape},
+                  v::BasisFunction{TopHatShape})
+  w = upper(u, v) - lower(u, v)
+  h = 1 / (u.shape.Δ * v.shape.Δ)
+  return w * h * overlap(u, v)
 end
 integral(a::BasisFunction{DeltaFunctionShape}, b::BasisFunction) = b(a.centre)
 integral(a::BasisFunction, b::BasisFunction{DeltaFunctionShape}) = a(b.centre)
@@ -172,6 +194,18 @@ function integral(a::BasisFunction{GaussianShape},
   σ₁, σ₂ = a.shape.σ, b.shape.σ
   μ₁, μ₂ = a.centre, b.centre
   σ² = σ₁^2 + σ₂^2
-  return √π * σ₁ * σ₂ / σ² * exp(-(μ₁ - μ₂)^2 / σ²)
+  return exp(-(μ₁ - μ₂)^2 / σ²) / √(π * σ²)
 end
+
+
+function integral(a::BasisFunction{GaussianShape}, b::BasisFunction{TentShape})
+  σ = a.shape.σ
+  μ = centre(a)
+  Δ = b.shape.Δ
+  c = centre(b)
+  foo(l, m) = (σ * exp(-(m - l)^2/σ^2)/√π + m * erf((m - l)/σ)) / 2Δ^2
+  return foo(0, μ - c + Δ) - foo(Δ, μ - c + Δ) +
+    foo(0, μ - c - Δ) - foo(-Δ, μ - c - Δ)
+end
+
 

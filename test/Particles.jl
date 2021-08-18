@@ -16,6 +16,7 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
     pushvelocity!(particle, efield, dt)
     @test velocity(particle) .== vel + q / m * efield * dt
   end
+
   @testset "deposition" begin
     N, L = 8, 8.0
     basis = BasisFunction(DeltaFunctionShape(), 0.0)
@@ -23,10 +24,13 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
     p = Particle(Nuclide(1.0, 1.0), basis, L/4, weight)
 
     charge = DeltaFunctionGrid(N, L)
-    @show union(p, charge)
+    @show intersect(p, charge)
     f = FourierField(charge)
     @show f.charge
-    deposit!(f, p)
+    #deposit!(f, p)
+    @test false
     @show f.charge
   end
+
+
 end

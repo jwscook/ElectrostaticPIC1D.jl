@@ -23,10 +23,15 @@ end
 function basisfunctions(inds, g::DeltaFunctionGrid)
 end
 Base.in(x::Number, g::DeltaFunctionGrid) = basisfunctions(cellindices(x, g), g)
-function Base.union(x, g::DeltaFunctionGrid)
+basis(g, i) = BasisFunction(TopHatShape(cellwidth(g)), cellcentre(g, i))
+function Base.intersect(x, g::DeltaFunctionGrid{BC}) where {BC}
+  bc = BC(0.0, g.L)
   t = TopHatShape(cellwidth(g))
-  inds = cellindices(lower(x), upper(x), g)
-  return (BasisFunction(t, cellcentre(g, i)) for i ∈ inds)
+  function overlaps(j)
+    u, v = translate(basis(x), j, bc)
+    return in(u, v)
+  end
+  return (basis(g, i) for i ∈ 1:g.N if overlaps(basis(g, i)))
 end
 
 # AbstractArray interface

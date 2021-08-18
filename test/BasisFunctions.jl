@@ -8,7 +8,7 @@ numtests = 10
 
 function isnormalisedtest(Shape)
   outcome = true
-  for i ∈ 1:numtests
+  for _ ∈ 1:numtests
     w = rand()
     s = Shape(w)
     x0 = randn()
@@ -19,12 +19,12 @@ function isnormalisedtest(Shape)
   @test outcome
 end
 function supporttest(Shape)
-  for i ∈ 1:10
+  for _ ∈ 1:10
     w = rand()
     x0 = randn()
     b = BasisFunction(Shape(w), x0)
     outcome = true
-    for i in 1:1000
+    for _ in 1:1000
       x = 3 * randn() * w + x0
       if x ∈ b
         outcome = outcome && b(x) > 0
@@ -56,4 +56,32 @@ end
   supporttest(GaussianShape)
 end
 
+@testset "Pairwise Integrals" begin
+for U ∈ (DeltaFunctionShape, BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
+for V ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
+@testset "$U $V" begin
+  noverlaps = 0
+  while true
+    v = BasisFunction(V(5*rand()), randn())
+    u = if U <: DeltaFunctionShape
+      BasisFunction(U(), lower(v) + rand() * width(v))
+    else
+      BasisFunction(U(5*rand()), randn())
+    end
+    expected = if U <: DeltaFunctionShape
+      v(centre(u))
+    else
+      quadgk(x-> u(x) * v(x), lower(u, v), upper(u, v);
+             order=51, atol=0, rtol=eps())[1]
+    end
+    expected < eps() && continue
+    result = integral(u, v)
+    @test result ≈ expected atol=100eps()
+    break
+  end
+end # testset U, V
+end # V
+end # U
+end # testset integrals
+ 
 end
