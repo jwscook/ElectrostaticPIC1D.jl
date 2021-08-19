@@ -3,8 +3,8 @@ struct Nuclide
   charge::Float64
   mass::Float64
   charge_over_mass::Float64
-  Nuclide(q, m) = new(q, m, q / m)
 end
+Nuclide(q, m) = Nuclide(q, m, q / m)
 
 charge(n::Nuclide) = n.charge
 mass(n::Nuclide) = n.mass
@@ -15,27 +15,34 @@ abstract type AbstractParticle end
 mutable struct Particle{S<:AbstractShape} <: AbstractParticle
   nuclide::Nuclide
   basis::BasisFunction{S}
-  x::Float64
-  v::Float64
+  velocity::Float64
 end
-function Particle(n::Nuclide, b::BasisFunction{S}=DeltaFunctionShape) where {S}
-  return Particle(n, b, 0.0, 0.0)
+function Particle(n::Nuclide, shape::AbstractShape=DeltaFunctionShape();
+    position::Float64=0.0, velocity::Float64=0.0, weight::Float64=0.0
+    ) where {S<:AbstractShape}
+  basis = BasisFunction(shape, position, weight)
+  return Particle(n, basis, velocity)
 end
 
-Base.position(p::Particle) = p.x
-velocity(p::Particle) = p.v
+velocity(p::Particle) = p.velocity
 basis(p::Particle) = p.basis
-centre(p::Particle) = centre(basis(p))
+Base.position(p::Particle) = centre(p)
 
-for op ∈ (:weight, :lower, :upper)
-  @eval $op(p::Particle) = $op(p.basis)
+for op ∈ (:weight, :lower, :upper, :width, :centre)
+  @eval $op(p::Particle) = $op(basis(p))
 end
 for op ∈ (:mass, :charge, :charge_mass_ratio)
   @eval $op(p::Particle) = $op(p.nuclide)
 end
 
-pushposition!(p::Particle, dt) = (p.x += p.v * dt; p)
-pushvelocity!(p::Particle, E, dt) = (p.v += charge_mass_ratio(p) * E * dt; p)
+function pushposition!(p::Particle, dt)
+  p.basis = translate(p.basis, p.velocity * dt)
+  return p
+end
+function pushvelocity!(p::Particle, E, dt)
+  p.velocity += charge_mass_ratio(p) * E * dt
+  return p
+end
 Base.push!(p::Particle, E, dt) = (pushposition!(p, dt); pushvelocity!(p, E, dt); p)
 
 BasisFunction(p::Particle) = p.basis
@@ -50,15 +57,14 @@ function Base.getindex(p::Particle, i)
 end
 
 overlap(b::BasisFunction, p::Particle) = overlap(b, basis(p))
+Base.intersect(p::Particle, x) = intersect(basis(p), x)
 
 function deposit!(obj::AbstractGrid{BC}, particle) where {BC<:AbstractBC}
   # loop over all items in obj that particle overlaps with
   bc = BC(0.0, obj.L)
-  @show intersect(particle, obj, bc)
-  for item ∈ intersect(particle, obj, bc)
+  for item ∈ intersect(particle, obj)
     amount = integral(item, basis(particle), bc) * charge(particle) * weight(particle)
-    @show item, particle, amount
-    @show overlap(item, basis(particle))
+    @show overlap(item, basis(particle)), amount
     item += amount
   end
   return obj

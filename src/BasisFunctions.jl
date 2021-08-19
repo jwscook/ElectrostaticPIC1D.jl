@@ -8,7 +8,7 @@ struct GaussianShape <: AbstractShape
     return new(σ)
   end
 end
-width(s::GaussianShape) = 13 .* s.σ
+width(s::GaussianShape) = 12.5 .* s.σ
 (s::GaussianShape)(x, centre) = exp(-(x-centre)^2 / s.σ^2) / √π / s.σ
 knots(s::GaussianShape) = 0:1
 
@@ -89,7 +89,9 @@ Base.:+(b::BasisFunction, x) = (b.weight += x; b)
 Base.:*(x, b::BasisFunction) = x * b.weight
 Base.:*(b::BasisFunction, x) = x * b.weight
 zero!(b::BasisFunction) = (b.weight *= false)
-Base.in(x, b::BasisFunction) = (b.centre - width(b)/2 <= x < b.centre + width(b)/2)
+function Base.in(x::Number, b::BasisFunction)
+  return (b.centre - width(b)/2 <= x < b.centre + width(b)/2)
+end
 
 function knots(a::BasisFunction, b::BasisFunction)
   output = Vector{Float64}()
@@ -123,7 +125,7 @@ end
 
 
 function overlap(a::BasisFunction, b::BasisFunction)
-  return lower(a) < upper(b) && upper(a) > lower(b)
+  return lower(a) == lower(b) || (lower(a) < upper(b) && upper(a) > lower(b))
 end
 Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 

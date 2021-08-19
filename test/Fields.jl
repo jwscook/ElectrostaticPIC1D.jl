@@ -96,7 +96,7 @@ end
     @test p > 2.9
   end
   @testset "Gaussian" begin
-    nrms, Ns = _dotest(GaussianShape)
+    nrms, Ns = _dotest(GaussianShape, verbose=true)
     p = findpower(1 ./ Ns, nrms)
     @test all(nrms .< 0.01)
   end

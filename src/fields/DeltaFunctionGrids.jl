@@ -20,18 +20,12 @@ cellindices(ab, g::DeltaFunctionGrid) = cellindices(ab..., g)
 function cellindices(a, b, g::DeltaFunctionGrid)
   return Int(floor(a / cellwidth(g))):Int(ceil(b / cellwidth(g)))
 end
-function basisfunctions(inds, g::DeltaFunctionGrid)
-end
-Base.in(x::Number, g::DeltaFunctionGrid) = basisfunctions(cellindices(x, g), g)
 basis(g, i) = BasisFunction(TopHatShape(cellwidth(g)), cellcentre(g, i))
-function Base.intersect(x, g::DeltaFunctionGrid{BC}) where {BC}
-  bc = BC(0.0, g.L)
-  t = TopHatShape(cellwidth(g))
-  function overlaps(j)
-    u, v = translate(basis(x), j, bc)
-    return in(u, v)
-  end
-  return (basis(g, i) for i ∈ 1:g.N if overlaps(basis(g, i)))
+function Base.intersect(x::BasisFunction{S},
+                        g::DeltaFunctionGrid{BC, T}) where {S, BC, T}
+  indlo = Int(floor(lower(x) / cellwidth(g) + 0.5)) 
+  indhi = Int(ceil(upper(x) / cellwidth(g) + 0.5))
+  return (basis(g, mod1(i, g.N)) for i ∈ indlo:indhi)
 end
 
 # AbstractArray interface

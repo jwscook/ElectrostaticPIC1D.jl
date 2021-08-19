@@ -5,10 +5,9 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
   @testset "Basic" begin
     q, m = 1.6, 9.11
     nuclide = Nuclide(q, m)
-    basis = BasisFunction(DeltaFunctionShape(), 0.0)
     pos = 1.0
     vel = 2.0
-    particle = Particle(nuclide, basis, pos, vel)
+    particle = Particle(nuclide; position=pos, velocity=vel, weight=0.0)
     dt = 3.0
     pushposition!(particle, dt)
     @test position(particle) .== pos + vel * dt
@@ -19,16 +18,14 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
 
   @testset "deposition" begin
     N, L = 8, 8.0
-    basis = BasisFunction(DeltaFunctionShape(), 0.0)
-    weight = Float64(π)
-    p = Particle(Nuclide(1.0, 1.0), basis, L/4, weight)
+    shape = DeltaFunctionShape()
+    p = Particle(Nuclide(1.0, 1.0), shape;
+                 position=L/4, velocity=0.0, weight=1.0)
+    @test weight(p) == 1.0
 
-    charge = DeltaFunctionGrid(N, L)
-    @show intersect(p, charge)
-    f = FourierField(charge)
-    @show f.charge
-    #deposit!(f, p)
-    @test false
+    rho = DeltaFunctionGrid(N, L)
+    f = FourierField(rho)
+    deposit!(f, p)
     @show f.charge
   end
 
