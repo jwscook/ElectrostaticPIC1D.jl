@@ -22,9 +22,9 @@ include("BasisFunctions.jl")
 export BSpline, GaussianShape, TentShape, TopHatShape, DeltaFunctionShape
 export BasisFunction, lower, upper, width, limits, centre, weight
 include("Fields.jl")
-export DeltaFunctionGrid, PeriodicGridBC
+export EquispacedValueGrid, PeriodicGridBC
 export FourierField, FiniteDifferenceField, LSFEMField, LSFEMGrid
-export cellcentres, solve!, update!
+export cellcentres, solve!, update!, cell, cells
 include("Particles.jl")
 export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
 export velocity, charge, mass, deposit!, integral, basis

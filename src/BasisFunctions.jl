@@ -71,6 +71,8 @@ lower(b::BasisFunction) = b.centre - width(b.shape) / 2
 upper(b::BasisFunction) = b.centre + width(b.shape) / 2
 lower(a::BasisFunction, b::BasisFunction) = max(lower(a), lower(b))
 upper(a::BasisFunction, b::BasisFunction) = min(upper(a), upper(b))
+Base.extrema(b::BasisFunction) = (lower(b), upper(b))
+Base.extrema(a::BasisFunction, b::BasisFunction) = (lower(a, b), upper(a, b))
 width(b::BasisFunction) = width(b.shape)
 weight(b::BasisFunction) = b.weight
 centre(b::BasisFunction) = b.centre
@@ -86,8 +88,14 @@ function translate(b::BasisFunction, x::Number)
   return translated
 end
 Base.:+(b::BasisFunction, x) = (b.weight += x; b)
+Base.:+(x, b::BasisFunction) = x + b.weight
+Base.:+(a::BasisFunction, b::BasisFunction) = a.weight + b.weight
 Base.:*(x, b::BasisFunction) = x * b.weight
 Base.:*(b::BasisFunction, x) = x * b.weight
+function Base.convert(::Type{Complex{T}}, b::BasisFunction{<:AbstractShape, T}
+                     ) where {T}
+  return Complex(b.weight)
+end
 zero!(b::BasisFunction) = (b.weight *= false)
 function Base.in(x::Number, b::BasisFunction)
   return (b.centre - width(b)/2 <= x < b.centre + width(b)/2)

@@ -16,17 +16,24 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
     @test velocity(particle) .== vel + q / m * efield * dt
   end
 
-  @testset "deposition" begin
-    N, L = 8, 8.0
-    shape = DeltaFunctionShape()
-    p = Particle(Nuclide(1.0, 1.0), shape;
-                 position=L/4, velocity=0.0, weight=1.0)
-    @test weight(p) == 1.0
-
-    rho = DeltaFunctionGrid(N, L)
-    f = FourierField(rho)
-    deposit!(f, p)
-    @show f.charge
+  @testset "Deposition" begin
+    @testset "DeltaFunctionShape, EquispacedValueGrid" begin
+      shape = DeltaFunctionShape()
+      for _ ∈ 1:10
+        N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), rand(), rand()
+        p = Particle(Nuclide(q, 1.0), shape;
+                     position=rand()*L, velocity=0.0, weight=w)
+        @test weight(p) == w
+        @test charge(p) == q
+        rho = EquispacedValueGrid(N, L)
+        f = FourierField(rho)
+        deposit!(f, p)
+        particleindex = cell(centre(p), rho)
+        @test f.charge[particleindex] ≈ w * q rtol=eps()
+        deposit!(f, p)
+        @test f.charge[particleindex] ≈ 2w * q rtol=eps()
+      end
+    end
   end
 
 

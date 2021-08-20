@@ -86,11 +86,11 @@ end
 
 
 struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
-  charge::DeltaFunctionGrid{BC,T}
-  electricfield::DeltaFunctionGrid{BC,T}
+  charge::EquispacedValueGrid{BC,T}
+  electricfield::EquispacedValueGrid{BC,T}
   integrator::PeriodicFiniteIntegratorOperator{A,T}
 end
-function FiniteDifferenceField(charge::DeltaFunctionGrid{PeriodicGridBC};
+function FiniteDifferenceField(charge::EquispacedValueGrid{PeriodicGridBC};
                                accuracy::Int=2)
   electricfield = deepcopy(charge)
   zero!(electricfield)

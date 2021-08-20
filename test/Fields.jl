@@ -20,7 +20,7 @@ numtests = 10
 @testset "Fourier fields" begin
   for i in 1:numtests
     N, L, efield, rho, A = setup()
-    charge = DeltaFunctionGrid(N, L)
+    charge = EquispacedValueGrid(N, L)
     x = cellcentres(charge)
     efieldexpected = efield.(x)
     rhoexpected = rho.(x)
@@ -36,7 +36,7 @@ end
   data = Dict(1=>[], 2=>[], 3=>[], 4=>[])
   for i in 1:8
     N, L, efield, rho, A = setup(N=2^(i+3), n=1, A=1)
-    charge = DeltaFunctionGrid(N, L)
+    charge = EquispacedValueGrid(N, L)
     x = cellcentres(charge)
     efieldexpected = efield.(x)
     rhoexpected = rho.(x)

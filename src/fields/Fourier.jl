@@ -12,11 +12,11 @@ end
 Base.length(p::PeriodicFourierWorkspace) = length(p.ik)
 
 struct FourierField{BC<:PeriodicGridBC, T} <: AbstractField{BC}
-  charge::DeltaFunctionGrid{BC,T}
-  electricfield::DeltaFunctionGrid{BC,T}
+  charge::EquispacedValueGrid{BC,T}
+  electricfield::EquispacedValueGrid{BC,T}
   helper::PeriodicFourierWorkspace
 end
-function FourierField(charge::DeltaFunctionGrid{PeriodicGridBC})
+function FourierField(charge::EquispacedValueGrid{PeriodicGridBC})
   electricfield = deepcopy(charge)
   zero!(electricfield)
   return FourierField(charge, electricfield,
