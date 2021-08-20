@@ -19,7 +19,7 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
   @testset "Deposition" begin
     @testset "DeltaFunctionShape, EquispacedValueGrid" begin
       shape = DeltaFunctionShape()
-      for _ ∈ 1:10
+      for _ ∈ 1:1
         N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), rand(), rand()
         p = Particle(Nuclide(q, 1.0), shape;
                      position=rand()*L, velocity=0.0, weight=w)
@@ -34,6 +34,27 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
         @test f.charge[particleindex] ≈ 2w * q rtol=eps()
       end
     end
+    @testset "DeltaFunctionShape, LSFEM TopHatShapes" begin
+      shape = DeltaFunctionShape()
+      for _ ∈ 1:1
+        N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), 3*rand(), rand()
+        p = Particle(Nuclide(q, 1.0), shape;
+                     position=rand()*L, velocity=0.0, weight=w)
+        @test weight(p) == w
+        @test charge(p) == q
+        rho = LSFEMGrid(N, L, TopHatShape)
+        f = LSFEMField(rho)
+        deposit!(f, p)
+        for i in f.charge
+          if in(i, basis(p))
+            @test weight(i) ≈ w * q rtol=eps()
+          else
+            @test weight(i) == 0.0
+          end
+        end
+      end
+    end
+
   end
 
 

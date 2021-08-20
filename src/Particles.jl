@@ -59,17 +59,15 @@ end
 overlap(b::BasisFunction, p::Particle) = overlap(b, basis(p))
 Base.intersect(p::Particle, x) = intersect(basis(p), x)
 
-function deposit!(obj::AbstractGrid{BC}, particle) where {BC<:AbstractBC}
-  # loop over all items in obj that particle overlaps with
-  bc = BC(0.0, obj.L)
-  for item ∈ intersect(particle, obj)
-    amount = integral(item, basis(particle), bc) * charge(particle) * weight(particle)
-    @show overlap(item, basis(particle)), amount
-    item += amount
-  end
-  return obj
-end
-
-
+#function deposit!(obj::AbstractGrid{BC}, particle) where {BC<:AbstractBC}
+#  # loop over all items in obj that particle overlaps with
+#  bc = BC(0.0, obj.L)
+#  qw = charge(particle) * weight(particle)
+#  for (_, item) ∈ intersect(basis(particle), obj)
+#    # multiply by width because all basis functions are normalised
+#    item += integral(item, basis(particle), bc) * qw / width(item)
+#  end
+#  return obj
+#end
 
 

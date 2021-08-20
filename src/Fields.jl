@@ -25,3 +25,11 @@ function update!(f::AbstractField, species)
   end
   return f
 end
+
+function Base.intersect(x::BasisFunction,
+                        g::AbstractGrid{BC}) where {BC}
+  bc = BC(0.0, g.L)
+  accept(b) = (ab = translate(x, b, bc); in(ab...))
+  return ((i, b) for (i, b) ∈ enumerate(g) if accept(b))
+end
+

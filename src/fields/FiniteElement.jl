@@ -3,6 +3,13 @@ struct LSFEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
   L::Float64
   bases::Vector{BasisFunction{S, T}}
+  partitionunityweights::Vector{T}
+  function LSFEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}},
+      puw=zeros(T, N)) where {BC<:AbstractBC, S<:AbstractShape, T}
+    dummy = new{BC, S, T}(N, L, bases, puw)
+    puw = solve(dummy, x->1)
+    return new{BC, S, T}(N, L, bases, puw)
+  end
 end
 function LSFEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
                   ) where {BC<:AbstractBC, S<:AbstractShape}
@@ -13,7 +20,8 @@ function LSFEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
   S <: GaussianShape && @assert N >= 12
   Δ = L / N
   bases = [BasisFunction(shape, (i-0.5) * Δ) for i ∈ 1:N]
-  return LSFEMGrid{BC,S,Float64}(N, L, bases)
+  #return LSFEMGrid{BC,S,Float64}(N, L, bases)
+  return LSFEMGrid{BC}(N, L, bases)
 end
 function (l::LSFEMGrid{BC})(x) where {BC}
   sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
@@ -33,7 +41,7 @@ zero!(f) = map(zero!, f)
 lower(l::LSFEMGrid) = 0.0
 upper(l::LSFEMGrid) = l.L
 
-#function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
+#function solve(l::LSFEMGrid{BC}, f::F) where {BC, F}
 #  p = BC(lower(l), upper(l))
 #  zero!(l)
 #  A = zeros(length(l), length(l))
@@ -45,13 +53,10 @@ upper(l::LSFEMGrid) = l.L
 #    b[j] = integral(v, f, p)
 #  end
 #  x = A \ b
-#  for i ∈ eachindex(x)
-#    @assert weight(l.bases[i]) == 0
-#    l.bases[i] += x[i]
-#  end
-#  return l
+#  return x
 #end
-function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
+ 
+function solve(l::LSFEMGrid{BC}, f::F) where {BC, F}
   p = BC(0.0, l.L)
   A = zeros(length(l), length(l))
   ThreadsX.foreach(enumerate(l)) do (j, v)
@@ -64,12 +69,27 @@ function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
     b[j] = f(centre(v))
   end
   x = A \ b
+  return x
+end
+
+function deposit!(l::LSFEMGrid{BC}, particle) where {BC<:AbstractBC}
+  # loop over all items in lthat particle overlaps with
+  bc = BC(0.0, l.L)
+  qw = charge(particle) * weight(particle)
+  for (index, item) ∈ intersect(basis(particle), l)
+    amount = integral(item, basis(particle), bc)
+    item += amount * qw * l.partitionunityweights[index]
+  end
+  return l
+end
+
+function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
+  x = solve(l, f)
   @avx for i ∈ eachindex(x)
     setindex!(l, x[i], i)
   end
   return l
 end
-
 
 struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractField{BC}
   charge::LSFEMGrid{BC,S,T}

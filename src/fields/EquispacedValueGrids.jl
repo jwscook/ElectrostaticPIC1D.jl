@@ -22,8 +22,8 @@ function cellindices(a, b, g::EquispacedValueGrid)
 end
 basis(g, i) = BasisFunction(TopHatShape(cellwidth(g)), cellcentre(g, i))
 cells(g) = [basis(g, i) for i ∈ 1:g.N]
-function Base.intersect(x::BasisFunction{S},
-                        g::EquispacedValueGrid{BC, T}) where {S, BC, T}
+function Base.intersect(x::BasisFunction{S, T1}, g::EquispacedValueGrid{BC, T2}
+    ) where {S<:AbstractShape, BC, T1, T2}
   indlo = Int(floor(lower(x) / cellwidth(g) + 0.5)) 
   indhi = Int(ceil(upper(x) / cellwidth(g) + 0.5))
   return ((mod1(i, g.N), basis(g, mod1(i, g.N))) for i ∈ indlo:indhi)
