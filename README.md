@@ -1,6 +1,6 @@
 # ElectrostaticPIC1D.jl
 
-*WIP: This is a nascent package and subject to large chages. See tests for current capabilities*
+*WIP: This is a nascent package and subject to large changes. See tests for current capabilities*
 
 
 ## Purpose
