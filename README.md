@@ -24,9 +24,9 @@ The plan is implement:
    - [ ] Fixed point Crank-Nicolson-esque semi-implicit
    - [ ] Fixed point 3rd order Simpson-esque semi-implicit
 
- - Particle shapes
-   - [ ] Delta function
-   - [ ] BSpline 0
-   - [ ] BSpline 1
-   - [ ] BSpline 2
-   - [ ] Gaussian
+ - Particle / element shapes
+   - [x] Delta function
+   - [x] BSpline 0
+   - [x] BSpline 1
+   - [x] BSpline 2
+   - [x] Gaussian
