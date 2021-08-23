@@ -3,24 +3,24 @@ using Statistics, Memoization
 struct PeriodicFiniteDifferenceOperator{T} <: AbstractMatrix{T}
   N::Int
   order::Int
-  accuracy::Int
+  order::Int
   stencil::Vector{T}
 end
-function PeriodicFiniteDifferenceOperator(N::Int, L::T, order::Int, accuracy::Int=2) where {T}
-  @assert iseven(accuracy)
+function PeriodicFiniteDifferenceOperator(N::Int, L::T, order::Int, order::Int=2) where {T}
+  @assert iseven(order)
   Δ = L / N
-  b = zeros(accuracy + 1)
+  b = zeros(order + 1)
   b[order + 1] = factorial(order)
-  x = (collect(1:accuracy + 1) .- (accuracy÷2 + 1)) .* Δ
-  stencil = hcat([x[i+1].^(0:accuracy) for i in 0:accuracy]...) \ b ./ Δ^order
-  return PeriodicFiniteDifferenceOperator{T}(N, order, accuracy, stencil)
+  x = (collect(1:order + 1) .- (order÷2 + 1)) .* Δ
+  stencil = hcat([x[i+1].^(0:order) for i in 0:order]...) \ b ./ Δ^order
+  return PeriodicFiniteDifferenceOperator{T}(N, order, order, stencil)
 end
 Base.eltype(p::PeriodicFiniteDifferenceOperator{T}) where T = T 
 Base.size(p::PeriodicFiniteDifferenceOperator{T}) where {T} = (p.N, p.N)
 function Base.getindex(p::PeriodicFiniteDifferenceOperator{T},
                        I::Vararg{Int, 2}) where {T}
   i, j = I
-  A = p.accuracy
+  A = p.order
   for jj ∈ (-A÷2:A÷2)
     j == mod1(jj + i, p.N) && return p.stencil[jj + A÷2 + 1]
   end
@@ -32,9 +32,9 @@ end
 struct PeriodicFiniteIntegratorOperator{A,T} <: Function #AbstractMatrix{T}
   N::Int
   Δ::T
-  function PeriodicFiniteIntegratorOperator(N::Int, L::T, accuracy::Int=2) where {T}
+  function PeriodicFiniteIntegratorOperator(N::Int, L::T, order::Int=2) where {T}
     Δ = L / N
-    return new{accuracy,T}(N, Δ)
+    return new{order,T}(N, Δ)
   end
 end
 Base.eltype(p::PeriodicFiniteIntegratorOperator{A,T}) where {A,T} = T 
@@ -91,15 +91,15 @@ struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
   integrator::PeriodicFiniteIntegratorOperator{A,T}
 end
 function FiniteDifferenceField(charge::EquispacedValueGrid{PeriodicGridBC};
-                               accuracy::Int=2)
+                               order::Int=2)
   electricfield = deepcopy(charge)
   zero!(electricfield)
   N = first(size(charge))
-  integrator = PeriodicFiniteIntegratorOperator(N, charge.L, accuracy)
+  integrator = PeriodicFiniteIntegratorOperator(N, charge.L, order)
   return FiniteDifferenceField(charge, electricfield, integrator)
 end
 
-accuracy(f::FiniteDifferenceField{BC,T,A}) where {BC,T,A} = A
+order(f::FiniteDifferenceField{BC,T,A}) where {BC,T,A} = A
 
 function solve!(f::FiniteDifferenceField)
   f.electricfield .= f.integrator(f.charge)

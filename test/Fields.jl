@@ -41,23 +41,23 @@ end
     efieldexpected = efield.(x)
     rhoexpected = rho.(x)
     charge .= rhoexpected
-    for accuracy ∈ keys(data)
-      f = FiniteDifferenceField(charge; accuracy=accuracy)
+    for order ∈ keys(data)
+      f = FiniteDifferenceField(charge; order=order)
       @test f.charge ≈ rhoexpected atol=10eps()
       solve!(f)
       if i == numtests
-        @test f.electricfield ≈ efieldexpected atol=10eps() rtol=0.01^accuracy
+        @test f.electricfield ≈ efieldexpected atol=10eps() rtol=0.01^order
       end
       nrm = norm(f.electricfield .- efieldexpected) ./ norm(efieldexpected)
-      push!(data[accuracy], (N, nrm))
+      push!(data[order], (N, nrm))
     end
   end
-  for accuracy in keys(data)
-    cellsizes = [1 ./i[1] for i in data[accuracy]]
-    errors = [i[2] for i in data[accuracy]]
+  for order in keys(data)
+    cellsizes = [1 ./i[1] for i in data[order]]
+    errors = [i[2] for i in data[order]]
     # fit log10(errors) = p *log10(cellsizes) + c because ϵ ∝ hᵖ
     p = findpower(cellsizes, errors)
-    @test (p > accuracy*0.99)
+    @test (p > order*0.99)
   end
 end
 
