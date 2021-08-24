@@ -15,12 +15,12 @@ function LSFEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
                   ) where {BC<:AbstractBC, S<:AbstractShape}
   return LSFEMGrid(N, L, S(L/N), BC)
 end
+
 function LSFEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
     ) where {BC<:AbstractBC, S<:AbstractShape}
-  S <: GaussianShape && @assert N >= 12
+  width(shape) > L && @error ArgumentError "Shapes must not be wider than the grid"
   Δ = L / N
   bases = [BasisFunction(shape, (i-0.5) * Δ) for i ∈ 1:N]
-  #return LSFEMGrid{BC,S,Float64}(N, L, bases)
   return LSFEMGrid{BC}(N, L, bases)
 end
 function (l::LSFEMGrid{BC})(x) where {BC}
@@ -162,22 +162,37 @@ function solve!(f::LSFEMField{BC, S}) where {BC, S}
     A = massmatrix(f)
     b = forcevector(f)
     @save "solve!_$(S)_$(f.charge.N).jld2" f err
-    @warn "Caught $err, saved matrices, and exiting."
+    @warn "Caught $err, saved field struct, and exiting."
     rethrow()
   end
   f.electricfield .= postsolve!(x, BC)
   return f
 end
 
-function massmatrixintegral(u, v, cache)
-  return get!(()->QuadGK.quadgk(
-    x->ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x),
-    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
+function massmatrixintegral(u::BasisFunction{GaussianShape}, v::BasisFunction{GaussianShape}, cache)
+  sigma(shape(u)) == sigma(shape(v)) || return _massmatrixintegral(u, v, cache)
+  Δ = abs(centre(v) - centre(u))
+  σ = sigma(shape(u))
+  return exp(-(Δ/σ)^2 / 2) * (1 - (Δ/σ)^2) / sqrt(2pi) / σ^3
+end
+massmatrixintegral(u, v, cache) = _massmatrixintegral(u, v, cache)
+
+function _massmatrixintegral(u, v, cache, zerohigherroranswers=false)
+  integrand(x) = ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x)
+  function internal()
+    (i, e) = QuadGK.quadgk(integrand, lower(u, v), upper(u, v), rtol=2eps())
+    # If the relative error is too bad, then the result should probably be zero
+    if zerohigherroranswers
+      return i * (e < sqrt(eps()) * abs(i))
+    else
+      return i
+    end
+  end
+  return get!(internal, cache, getkey(u, v))
 end
 
 @memoize function massmatrix(f::LSFEMField)
-  return Symmetric(matrix(f.electricfield, f.electricfield,
-                          massmatrixintegral))
+  return matrix(f.electricfield, f.electricfield, massmatrixintegral, Symmetric)
 end
 @memoize function normalisedstiffnessmatrix(f::LSFEMField)
   return matrix(f.charge, f.charge, stiffnessmatrixintegral)
@@ -191,20 +206,21 @@ function stiffnessmatrixintegral(u, v, cache)
     lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
 end
 
-function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integral::F
-               ) where {BC<:PeriodicGridBC, F}
-  p = BC(lower(a), upper(a))
+function matrix(a::LSFEMGrid{BC}, b::LSFEMGrid{BC}, integral::F, ::Type{M}=SparseMatrixCSC
+               ) where {BC<:PeriodicGridBC, F, M<:AbstractMatrix}
+  bc = BC(lower(a), upper(a))
   As = [spzeros(length(a), length(a)) for _ ∈ 1:Threads.nthreads()]
   caches = [IdDict{UInt64,Any}() for _ ∈ 1:Threads.nthreads()]
   foreach(enumerate(b)) do (j, v̄)
     cache = caches[Threads.threadid()]
     A = As[Threads.threadid()]
     for (i, ū) ∈ enumerate(a)
-      u, v = translate(ū, v̄, p)
+      M == Symmetric && j > i && (A[i, j] = A[j, i]; continue)
+      u, v = translate(ū, v̄, bc)
       u ∈ v || continue
       A[i, j] = integral(u, v, cache)
     end
   end
-  return sum(As)
+  return M(sum(As))
 end
 

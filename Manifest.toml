@@ -61,6 +61,11 @@ git-tree-sha1 = "147bcca99e098c0da48d7d9e108210704138f0f9"
 uuid = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
 version = "0.1.2"
 
+[[Cassette]]
+git-tree-sha1 = "b4b1d61ebbae2bc69a45e3a6b8439b4e411bc131"
+uuid = "7057c7e9-c182-5462-911a-8362d720325c"
+version = "0.3.8"
+
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "bdc0937269321858ab2a4f288486cb258b9a0af7"
@@ -283,6 +288,12 @@ deps = ["Dates", "Mmap", "Parsers", "Unicode"]
 git-tree-sha1 = "8076680b162ada2a031f707ac7b4953e30667a37"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.2"
+
+[[KernelAbstractions]]
+deps = ["Adapt", "Cassette", "InteractiveUtils", "MacroTools", "SpecialFunctions", "StaticArrays", "UUIDs"]
+git-tree-sha1 = "5e6c70389c1b1e40adb81664ca8cea6ce8127afc"
+uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+version = "0.7.0"
 
 [[Lazy]]
 deps = ["MacroTools"]

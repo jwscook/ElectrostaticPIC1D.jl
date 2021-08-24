@@ -2,18 +2,18 @@ using Statistics, Memoization
 
 struct PeriodicFiniteDifferenceOperator{T} <: AbstractMatrix{T}
   N::Int
-  order::Int
-  order::Int
+  difforder::Int
+  accuracyorder::Int
   stencil::Vector{T}
 end
-function PeriodicFiniteDifferenceOperator(N::Int, L::T, order::Int, order::Int=2) where {T}
-  @assert iseven(order)
+function PeriodicFiniteDifferenceOperator(N::Int, L::T, difforder::Int, accuracyorder::Int=2) where {T}
+  @assert iseven(accuracyorder)
   Δ = L / N
-  b = zeros(order + 1)
-  b[order + 1] = factorial(order)
-  x = (collect(1:order + 1) .- (order÷2 + 1)) .* Δ
-  stencil = hcat([x[i+1].^(0:order) for i in 0:order]...) \ b ./ Δ^order
-  return PeriodicFiniteDifferenceOperator{T}(N, order, order, stencil)
+  b = zeros(accuracyorder + 1)
+  b[difforder + 1] = factorial(difforder)
+  x = (collect(1:accuracyorder + 1) .- (accuracy÷2 + 1)) .* Δ
+  stencil = hcat([x[i+1].^(0:accuracyorder) for i in 0:accuracyorder]...) \ b ./ Δ^difforder
+  return PeriodicFiniteDifferenceOperator{T}(N, difforder, accuracyorder, stencil)
 end
 Base.eltype(p::PeriodicFiniteDifferenceOperator{T}) where T = T 
 Base.size(p::PeriodicFiniteDifferenceOperator{T}) where {T} = (p.N, p.N)

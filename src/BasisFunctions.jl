@@ -9,6 +9,7 @@ struct GaussianShape <: AbstractShape
   end
 end
 width(s::GaussianShape) = 12.5 .* s.σ
+sigma(s::GaussianShape) = s.σ
 (s::GaussianShape)(x, centre) = exp(-(x-centre)^2 / s.σ^2) / √π / s.σ
 knots(s::GaussianShape) = 0:1
 
