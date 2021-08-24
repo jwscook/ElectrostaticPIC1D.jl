@@ -19,7 +19,7 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
   @testset "Deposition" begin
     @testset "DeltaFunctionShape, EquispacedValueGrid" begin
       shape = DeltaFunctionShape()
-      for _ ∈ 1:1
+      for _ ∈ 1:10
         N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), rand(), rand()
         p = Particle(Nuclide(q, 1.0), shape;
                      position=rand()*L, velocity=0.0, weight=w)
@@ -36,7 +36,7 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
     end
     @testset "DeltaFunctionShape, LSFEM TopHatShapes" begin
       shape = DeltaFunctionShape()
-      for _ ∈ 1:1
+      for _ ∈ 1:10
         N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), 3*rand(), rand()
         p = Particle(Nuclide(q, 1.0), shape;
                      position=rand()*L, velocity=0.0, weight=w)
@@ -54,7 +54,6 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
         end
       end
     end
-
   end
 
 

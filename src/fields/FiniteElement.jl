@@ -37,6 +37,11 @@ function Base.setindex!(l::LSFEMGrid, v, i)
   return l
 end
 
+function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:LSFEMGrid}
+  return isapprox(a.bases, b.bases, atol=atol, rtol=rtol)
+end
+
+
 zero!(f) = map(zero!, f)
 lower(l::LSFEMGrid) = 0.0
 upper(l::LSFEMGrid) = l.L
@@ -82,6 +87,17 @@ function deposit!(l::LSFEMGrid{BC}, particle) where {BC<:AbstractBC}
   end
   return l
 end
+
+function antideposit(l::LSFEMGrid{BC}, particle) where {BC<:AbstractBC}
+  # loop over all items in lthat particle overlaps with
+  bc = BC(0.0, l.L)
+  amount = 0.0
+  for (index, item) ∈ intersect(basis(particle), l)
+    amount += integral(item, basis(particle), bc) * l.partitionunityweights[index]
+  end
+  return amount
+end
+
 
 function update!(l::LSFEMGrid{BC}, f::F) where {BC, F}
   x = solve(l, f)

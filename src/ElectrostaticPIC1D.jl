@@ -27,18 +27,9 @@ export FourierField, FiniteDifferenceField, LSFEMField, LSFEMGrid
 export cellcentres, solve!, update!, cell, cells
 include("Particles.jl")
 export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
-export velocity, charge, mass, deposit!, integral, basis
-
-struct Species{S<:AbstractShape}
-  particles::Vector{Particle{S}}
-end
-
-struct Simulation{F<:AbstractField}
-  species::Vector{Species}
-  timestep::Float64
-  endtime::Float64
-  diagnoticeverytimestep::Int64
-  field::F
-end
+export velocity, charge, mass, deposit!, integral, basis, electricfield
+include("Plasmas.jl")
+include("TimeIntegrators.jl")
+include("Simulations.jl")
 
 end # module

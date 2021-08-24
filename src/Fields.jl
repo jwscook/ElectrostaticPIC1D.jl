@@ -18,6 +18,17 @@ include("fields/FiniteDifference.jl")
 include("fields/FiniteElement.jl")
 
 deposit!(f::AbstractField, p) = deposit!(f.charge, p)
+electricfield(f::AbstractField, p) = antideposit(f.electricfield, p)
+cellsize(l::AbstractField) = l.charge.L / numberofunknowns(l.charge)
+numberofunknowns(f::AbstractField) = numberofunknowns(f.charge)
+
+function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:AbstractField}
+  return isapprox(a.charge, b.charge, atol=atol, rtol=rtol) && 
+    isapprox(a.electricfield, b.electricfield, atol=atol, rtol=rtol)
+end
+
+zerocharge!(f::AbstractField) = zero!(f.charge)
+zeroelectricfield!(f::AbstractField) = zero!(f.electricfield)
 
 function update!(f::AbstractField, species)
   for particle ∈ species

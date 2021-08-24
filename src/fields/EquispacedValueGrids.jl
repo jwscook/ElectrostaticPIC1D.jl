@@ -17,6 +17,7 @@ cell(x, g::EquispacedValueGrid) = Int(floor(x / cellwidth(g))) + 1
 cellcentre(g::EquispacedValueGrid, i::Integer) = (i - 0.5) * cellwidth(g)
 cellcentres(g::EquispacedValueGrid) = (cellcentre(g, i) for i ∈ 1:g.N)
 cellindices(ab, g::EquispacedValueGrid) = cellindices(ab..., g)
+numberofunknowns(g::EquispacedValueGrid) = g.N
 function cellindices(a, b, g::EquispacedValueGrid)
   return Int(floor(a / cellwidth(g))):Int(ceil(b / cellwidth(g)))
 end
@@ -27,6 +28,12 @@ function Base.intersect(x::BasisFunction{S, T1}, g::EquispacedValueGrid{BC, T2}
   indlo = Int(floor(lower(x) / cellwidth(g) + 0.5)) 
   indhi = Int(ceil(upper(x) / cellwidth(g) + 0.5))
   return ((mod1(i, g.N), basis(g, mod1(i, g.N))) for i ∈ indlo:indhi)
+end
+
+function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:EquispacedValueGrid}
+  a.N == b.N && return false
+  a.L == b.L && return false
+  return isapprox(a.values, b.values, atol=atol, rtol=rtol)
 end
 
 # AbstractArray interface
@@ -44,9 +51,20 @@ function deposit!(evg::EquispacedValueGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(0.0, evg.L)
   qw = charge(particle) * weight(particle)
   for (index, item) ∈ intersect(basis(particle), evg)
+    # multiply by width because all basis functions are normalised
     amountincell = integral(item, basis(particle), bc) * width(item)
     evg[index] += amountincell * qw
+  end
+  return evg
+end
+
+function antideposit(evg::EquispacedValueGrid{BC}, particle) where {BC<:AbstractBC}
+  # loop over all items in evg that particle overlaps with
+  bc = BC(0.0, evg.L)
+  amount = 0.0
+  for (index, item) ∈ intersect(basis(particle), evg)
     # multiply by width because all basis functions are normalised
+    amount += integral(item, basis(particle), bc) * width(item)
   end
   return evg
 end

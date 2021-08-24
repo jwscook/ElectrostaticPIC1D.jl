@@ -68,12 +68,29 @@ mutable struct BasisFunction{S<:AbstractShape, T}
   weight::T
 end
 BasisFunction(s::AbstractShape, centre) = BasisFunction(s, centre, 0.0)
+
+
+Base.extrema(b::BasisFunction) = (lower(b), upper(b))
+Base.extrema(a::BasisFunction, b::BasisFunction) = (lower(a, b), upper(a, b))
+function Base.copy(a::BasisFunction{S}, b::BasisFunction{S}) where {S<:AbstractShape}
+  a.S = b.S
+  a.centre = b.centre
+  a.weight = b.weight
+  return a
+end
+for op ∈ (:+, :-)
+  @eval function Base.$op(a::BasisFunction{S}, b::BasisFunction{S}) where {S<:AbstractShape}
+    @assert a.shape == b.shape
+    return BasisFunction{S}(a.shape, $op(a.centre, b.centre), (a.weight + b.weight)/2)
+  end
+end
+Base.:*(a::BasisFunction, x::Number) = BasisFunction(a.shape, a.centre * x, a.weight)
+Base.:/(a::BasisFunction, x::Number) = BasisFunction(a.shape, a.centre / x, a.weight)
+
 lower(b::BasisFunction) = b.centre - width(b.shape) / 2
 upper(b::BasisFunction) = b.centre + width(b.shape) / 2
 lower(a::BasisFunction, b::BasisFunction) = max(lower(a), lower(b))
 upper(a::BasisFunction, b::BasisFunction) = min(upper(a), upper(b))
-Base.extrema(b::BasisFunction) = (lower(b), upper(b))
-Base.extrema(a::BasisFunction, b::BasisFunction) = (lower(a, b), upper(a, b))
 width(b::BasisFunction) = width(b.shape)
 weight(b::BasisFunction) = b.weight
 centre(b::BasisFunction) = b.centre
