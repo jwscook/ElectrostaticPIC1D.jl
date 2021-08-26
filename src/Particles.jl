@@ -72,6 +72,8 @@ end
 Base.push!(p::Particle, E, dt) = (pushposition!(p, dt); pushvelocity!(p, E, dt); p)
 
 function pushvelocity!(p::Particle, f::AbstractField, dt)
+  @show p, typeof(f)
+  @show typeof(electricfield(f, p))
   return pushvelocity!(p, electricfield(f, p), dt)
 end
 

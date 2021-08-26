@@ -17,47 +17,47 @@ end
 
 numtests = 10
 
-#@testset "Fourier fields" begin
-#  for i in 1:numtests
-#    N, L, efield, rho, A = setup()
-#    charge = EquispacedValueGrid(N, L)
-#    x = cellcentres(charge)
-#    efieldexpected = efield.(x)
-#    rhoexpected = rho.(x)
-#    charge .= rhoexpected
-#    f = FourierField(charge)
-#    @test f.charge ≈ rhoexpected atol=10eps()
-#    solve!(f)
-#    @test f.electricfield ≈ efieldexpected atol=10eps() rtol=sqrt(eps())
-#  end
-#end
-#
-#@testset "FiniteDifference fields" begin
-#  data = Dict(1=>[], 2=>[], 3=>[], 4=>[])
-#  for i in 1:8
-#    N, L, efield, rho, A = setup(N=2^(i+3), n=1, A=1)
-#    charge = EquispacedValueGrid(N, L)
-#    x = cellcentres(charge)
-#    efieldexpected = efield.(x)
-#    rhoexpected = rho.(x)
-#    charge .= rhoexpected
-#    for order ∈ keys(data)
-#      f = FiniteDifferenceField(charge; order=order)
-#      @test f.charge ≈ rhoexpected atol=10eps()
-#      solve!(f)
-#      @test f.electricfield ≈ efieldexpected atol=10eps() rtol=0.01^order
-#      nrm = norm(f.electricfield .- efieldexpected) ./ norm(efieldexpected)
-#      push!(data[order], (N, nrm))
-#    end
-#  end
-#  for order in keys(data)
-#    cellsizes = [1 ./i[1] for i in data[order]]
-#    errors = [i[2] for i in data[order]]
-#    # fit log10(errors) = p *log10(cellsizes) + c because ϵ ∝ hᵖ
-#    p = findpower(cellsizes, errors)
-#    @test (p > order*0.99)
-#  end
-#end
+@testset "Fourier fields" begin
+  for i in 1:numtests
+    N, L, efield, rho, A = setup()
+    charge = EquispacedValueGrid(N, L)
+    x = cellcentres(charge)
+    efieldexpected = efield.(x)
+    rhoexpected = rho.(x)
+    charge .= rhoexpected
+    f = FourierField(charge)
+    @test f.charge ≈ rhoexpected atol=10eps()
+    solve!(f)
+    @test f.electricfield ≈ efieldexpected atol=10eps() rtol=sqrt(eps())
+  end
+end
+
+@testset "FiniteDifference fields" begin
+  data = Dict(1=>[], 2=>[], 3=>[], 4=>[])
+  for i in 1:8
+    N, L, efield, rho, A = setup(N=2^(i+3), n=1, A=1)
+    charge = EquispacedValueGrid(N, L)
+    x = cellcentres(charge)
+    efieldexpected = efield.(x)
+    rhoexpected = rho.(x)
+    charge .= rhoexpected
+    for order ∈ keys(data)
+      f = FiniteDifferenceField(charge; order=order)
+      @test f.charge ≈ rhoexpected atol=10eps()
+      solve!(f)
+      @test f.electricfield ≈ efieldexpected atol=10eps() rtol=0.01^order
+      nrm = norm(f.electricfield .- efieldexpected) ./ norm(efieldexpected)
+      push!(data[order], (N, nrm))
+    end
+  end
+  for order in keys(data)
+    cellsizes = [1 ./i[1] for i in data[order]]
+    errors = [i[2] for i in data[order]]
+    # fit log10(errors) = p *log10(cellsizes) + c because ϵ ∝ hᵖ
+    p = findpower(cellsizes, errors)
+    @test (p > order*0.99)
+  end
+end
 
 @testset "LSFEM fields" begin
 

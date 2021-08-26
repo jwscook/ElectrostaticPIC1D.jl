@@ -9,7 +9,7 @@ struct LeapFropTimeIntegrator <: AbstractTimeIntegrator
   dt::Float64
 end
 
-function LeapFrogTimeIntegrator(f::AbstractField, p::Plasma)
+function LeapFrogTimeIntegrator(p::Plasma, f::AbstractField)
   return LeapFropTimeIntegrator(cellsize(f) / maxspeed(p))
 end
 
@@ -36,7 +36,7 @@ end
   plasmacopy
 end
 
-function SemiImplicit2ndOrderTimeIntegrator(f::AbstractField, p::Plasma; maxiters=10, atol=0, rtol=sqrt(eps()))
+function SemiImplicit2ndOrderTimeIntegrator(p::Plasma, f::AbstractField; maxiters=10, atol=0, rtol=sqrt(eps()))
   return SemiImplicit2ndOrderTimeIntegrator(cellsize(f) / maxspeed(p), atol, rtol, maxiters, deepcopy(p), deepcopy(f))
 end
 
@@ -57,7 +57,7 @@ function (ti::SemiImplicit2ndOrderTimeIntegrator)(plasma, field, dt=nothing)
         p₀ = plasmacopy[i][j]
         copy!(particle, p₀)
         pushposition!(particle, dt/2) # push half with starting velocity
-        pushvelocity!(particle, electricfield(field), dt) # accelerate with middle velocity
+        pushvelocity!(particle, field, dt) # accelerate with middle velocity
         pushposition!(particle, dt/2) # now push other half timestep with end timestep velocity
         deposit!(field, (p₀ + particle) / 2)
       end

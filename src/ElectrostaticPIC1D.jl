@@ -24,12 +24,15 @@ export BasisFunction, lower, upper, width, limits, centre, weight
 include("Fields.jl")
 export EquispacedValueGrid, PeriodicGridBC
 export FourierField, FiniteDifferenceField, LSFEMField, LSFEMGrid
-export cellcentres, solve!, update!, cell, cells
+export cellcentres, solve!, update!, cell, cells, cellsize
 include("Particles.jl")
 export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
-export velocity, charge, mass, deposit!, integral, basis, electricfield
+export velocity, charge, mass, deposit!, antideposit, integral, basis, electricfield
 include("Plasmas.jl")
+export Plasma, Species
 include("TimeIntegrators.jl")
+export LeapFrogTimeIntegrator, LeapFrogTimeIntegrator
 include("Simulations.jl")
+export Simulation, SimulationParameters, run!
 
 end # module

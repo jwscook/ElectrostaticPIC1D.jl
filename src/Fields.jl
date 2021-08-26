@@ -19,6 +19,7 @@ include("fields/FiniteElement.jl")
 
 deposit!(f::AbstractField, p) = deposit!(f.charge, p)
 electricfield(f::AbstractField, p) = antideposit(f.electricfield, p)
+antideposit(f::AbstractField, p) = antideposit(f.electricfield, p)
 cellsize(l::AbstractField) = l.charge.L / numberofunknowns(l.charge)
 numberofunknowns(f::AbstractField) = numberofunknowns(f.charge)
 

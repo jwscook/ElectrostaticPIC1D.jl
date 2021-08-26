@@ -64,8 +64,8 @@ function antideposit(evg::EquispacedValueGrid{BC}, particle) where {BC<:Abstract
   amount = 0.0
   for (index, item) ∈ intersect(basis(particle), evg)
     # multiply by width because all basis functions are normalised
-    amount += integral(item, basis(particle), bc) * width(item)
+    amount += integral(item, basis(particle), bc) * width(item) * evg.values[index]
   end
-  return evg
+  return amount
 end
 

@@ -93,7 +93,7 @@ function antideposit(l::LSFEMGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(0.0, l.L)
   amount = 0.0
   for (index, item) ∈ intersect(basis(particle), l)
-    amount += integral(item, basis(particle), bc) * l.partitionunityweights[index]
+    amount += integral(item, basis(particle), bc) * l.partitionunityweights[index] * weight(item)
   end
   return amount
 end

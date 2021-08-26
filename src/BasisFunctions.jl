@@ -120,15 +120,12 @@ function Base.in(x::Number, b::BasisFunction)
 end
 
 function knots(a::BasisFunction, b::BasisFunction)
-  output = Vector{Float64}()
   overlap(a, b) || return output
   ka = knots(a)
   kb = knots(b)
   lo = max(ka[1], kb[1])
   hi = min(ka[end], kb[end])
-  push!(output, filter(x->lo <= x <= hi, ka)...)
-  push!(output, filter(x->lo <= x <= hi, kb)...)
-  output = unique(output)
+  output = filter(x->lo <= x <= hi, unique(vcat(ka, kb)))
   sort!(output)
   return output
 end
