@@ -16,11 +16,9 @@ right = Species([Particle(nuclide, particleshape; position=x, velocity=1.0, weig
 
 plasma = Plasma([left, right])
 
-#Δ = cellsize(field)
-
 ti = LeapFrogTimeIntegrator(plasma, field)
 
-sim = Simulation(plasma, field, ti, diagnosticdumpevery=1, endtime=10.0, filenamestub="Fourier-DeltaFunctoin-LeapFrog")
+sim = Simulation(plasma, field, ti, diagnosticdumpevery=1, endtime=10.0, filenamestub="data/")
 
 run!(sim)
 
