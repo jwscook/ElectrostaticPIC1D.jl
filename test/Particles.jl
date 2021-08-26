@@ -34,8 +34,6 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
         @test f.charge[particleindex] ≈ 2w * q rtol=eps()
         E = rand()
         f.electricfield .= E
-        @show E
-        @show f.electricfield.values
         @test antideposit(f, p) ≈ E rtol=eps()
       end
     end
@@ -59,8 +57,6 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
         end
         E = rand()
         f.electricfield .= E
-        @show E
-        @show weight.(f.electricfield.bases)
         @test antideposit(f, p) ≈ E rtol=eps()
       end
     end

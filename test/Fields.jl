@@ -100,6 +100,7 @@ end
       @test rhoresult ≈ rhoexpected atol=0 rtol=2eps()
       solve!(f)
       efieldresult = f.electricfield.(x)
+      @test efieldresult ≈ efieldexpected atol=10eps() rtol=2.0^(- log2(N))
       nrm = norm(efieldresult .- efieldexpected) ./ norm(efieldexpected)
       verbose && @show N, nrm, shape
       push!(nrms, nrm)
@@ -108,18 +109,18 @@ end
   end
 
   @testset "BSpline{1}" begin
-    nrms, Ns = _dotest(x->BSpline{1}(x); verbose=true)
+    nrms, Ns = _dotest(x->BSpline{1}(x); verbose=false)
     p = findpower(1 ./ Ns, nrms)
     @test p ≈ 2 rtol = 0.1
   end
   @testset "BSpline{2}" begin
-    nrms, Ns = _dotest(x->BSpline{2}(x); verbose=true)
+    nrms, Ns = _dotest(x->BSpline{2}(x); verbose=false)
     inds = Ns .< 1000
     p = findpower(1 ./ Ns[inds], nrms[inds])
     @test p > 2.9
   end
   @testset "Gaussian" begin
-    nrms, Ns = _dotest(x->GaussianShape(x * √2), verbose=true)
+    nrms, Ns = _dotest(x->GaussianShape(x * √2), verbose=false)
     p = findpower(1 ./ Ns, nrms)
     @test all(nrms .< 0.01)
   end
