@@ -45,7 +45,7 @@ end
       f = FiniteDifferenceField(charge; order=order)
       @test f.charge ≈ rhoexpected atol=10eps()
       solve!(f)
-      @test f.electricfield ≈ efieldexpected atol=10eps() rtol=0.01^order
+      @test f.electricfield ≈ efieldexpected atol=10eps() rtol=2.0^(- order * i)
       nrm = norm(f.electricfield .- efieldexpected) ./ norm(efieldexpected)
       push!(data[order], (N, nrm))
     end
