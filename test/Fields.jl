@@ -92,6 +92,11 @@ end
 
   @testset "Galerkin" begin
 
+  @testset "BSpline{0} BSpline{1}" begin
+    nrms, Ns = _dotest(GalerkinFEMField, BSpline{1}, BSpline{2}; verbose=false)
+    p = findpower(1 ./ Ns, nrms)
+    @test p ≈ 2 rtol = 0.1
+  end
   @testset "BSpline{1} BSpline{2}" begin
     nrms, Ns = _dotest(GalerkinFEMField, BSpline{1}, BSpline{2}; verbose=false)
     p = findpower(1 ./ Ns, nrms)
