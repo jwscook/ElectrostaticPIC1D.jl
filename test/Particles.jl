@@ -45,7 +45,7 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
                      position=rand()*L, velocity=0.0, weight=w)
         @test weight(p) == w
         @test charge(p) == q
-        rho = LSFEMGrid(N, L, TopHatShape)
+        rho = FEMGrid(N, L, TopHatShape)
         f = LSFEMField(rho)
         deposit!(f, p)
         for i in f.charge

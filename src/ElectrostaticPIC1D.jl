@@ -23,7 +23,7 @@ export BSpline, GaussianShape, TentShape, TopHatShape, DeltaFunctionShape
 export BasisFunction, lower, upper, width, limits, centre, weight
 include("Fields.jl")
 export EquispacedValueGrid, PeriodicGridBC
-export FourierField, FiniteDifferenceField, LSFEMField, LSFEMGrid
+export FourierField, FiniteDifferenceField, LSFEMField, GalerkinFEMField, FEMGrid
 export cellcentres, solve!, update!, cell, cells, cellsize
 include("Particles.jl")
 export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!

@@ -16,7 +16,7 @@ The plan is implement:
  - Field Solvers
    - [x] Finite difference
    - [x] Least square finite element
-   - [ ] Mixed Galerkin finite element
+   - [x] (Mixed) Galerkin finite element
    - [x] Fourier (but not fully-Spectral)
 
  - Time integrators
