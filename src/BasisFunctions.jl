@@ -142,8 +142,8 @@ function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
   return (a, b)
 end
 
-(b::BasisFunction)(x) = b.shape(x, b.centre)
-function (b::BasisFunction)(x, p::PeriodicGridBC)
+(b::BasisFunction)(x::Number) = b.shape(x, b.centre)
+function (b::BasisFunction)(x::Number, p::PeriodicGridBC)
   in(x, b) && return b(x)
   in(x, translate(b, length(p))) && return translate(b, length(p))(x)
   in(x, translate(b,-length(p))) && return translate(b,-length(p))(x)

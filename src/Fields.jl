@@ -24,13 +24,13 @@ cellsize(l::AbstractField) = l.charge.L / numberofunknowns(l.charge)
 domainsize(l::AbstractField) = l.charge.L 
 numberofunknowns(f::AbstractField) = numberofunknowns(f.charge)
 
-function energy(f::AbstractField{BC}) where {BC}
+function energydensity(f::AbstractField{BC}; rtol=sqrt(eps())) where {BC}
   bc = BC(0.0, domainsize(f))
-  return mapreduce(i->integral(i, x->1, bc)^2 / 2 * weight(i), +, bases(f.electricfield))
+  return quadgk(x->f.electricfield(x)^2, 0, domainsize(f), rtol=rtol)[1] / 2 / domainsize(f) # TODO - make faster
 end
-function charge(f::AbstractField{BC}) where {BC}
+function chargedensity(f::AbstractField{BC}) where {BC}
   bc = BC(0.0, domainsize(f))
-  return mapreduce(i->integral(i, x->1, bc) * weight(i), +, bases(f.charge))
+  return mapreduce(i->integral(i, x->1, bc) * weight(i), +, bases(f.charge)) / domainsize(f)
 end
 
 function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:AbstractField}

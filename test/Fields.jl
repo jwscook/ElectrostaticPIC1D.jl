@@ -1,4 +1,4 @@
-using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
+using ElectrostaticPIC1D, QuadGK, Random, Test; Random.seed!(0)
 
 using ForwardDiff, LinearAlgebra
 
@@ -71,21 +71,31 @@ end
     Ns = Int.(exp2.(4:10))
     for N in Ns
       N, L, fefield, frho, A = setup(N=N, n=1)
-      charge = FEMGrid(N, L, chargeshape_ctor(L/N))
-      efield = FEMGrid(N, L, efieldshape_ctor(L/N))
+      chargegrid = FEMGrid(N, L, chargeshape_ctor(L/N))
+      efieldgrid = FEMGrid(N, L, efieldshape_ctor(L/N))
       x = ((1:N) .- 0.5) ./ N * L
       efieldexpected = fefield.(x)
       rhoexpected = frho.(x)
-      update!(charge, frho)
-      f = FEMFieldType(charge, efield)
+      update!(chargegrid, frho)
+      f = FEMFieldType(chargegrid, efieldgrid)
       rhoresult = f.charge.(x)
       @test rhoresult ≈ rhoexpected atol=0 rtol=2eps()
       solve!(f)
       efieldresult = f.electricfield.(x)
-      @test efieldresult ≈ efieldexpected atol=10eps() rtol=2.0^(- log2(N))
+
+      rtol = 2.0^(- log2(N))
+      @test efieldresult ≈ efieldexpected atol=10eps() rtol=rtol
       nrm = norm(efieldresult .- efieldexpected) ./ norm(efieldexpected)
       verbose && @show N, nrm, typeof(f)
       push!(nrms, nrm)
+
+      fieldcharge = chargedensity(f) * L
+      expectedfieldcharge = QuadGK.quadgk(frho, 0.0, L, rtol=eps())[1]
+      @test fieldcharge ≈ expectedfieldcharge atol=1e-12 rtol=100eps()
+
+      fieldenergy = energydensity(f; rtol=sqrt(eps()))
+      expectedfieldenergy = QuadGK.quadgk(x->fefield(x)^2 / 2, 0.0, L, rtol=eps())[1] / L
+      @test fieldenergy ≈ expectedfieldenergy atol=0 rtol=max(rtol, sqrt(eps()))
     end
     return nrms, Ns
   end
