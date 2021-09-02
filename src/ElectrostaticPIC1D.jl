@@ -24,10 +24,11 @@ export BasisFunction, lower, upper, width, limits, centre, weight
 include("Fields.jl")
 export EquispacedValueGrid, PeriodicGridBC
 export FourierField, FiniteDifferenceField, LSFEMField, GalerkinFEMField, FEMGrid
-export cellcentres, solve!, update!, cell, cells, cellsize
+export cellcentres, solve!, update!, cell, cells, cellsize, energydensity
 include("Particles.jl")
 export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
 export velocity, charge, mass, deposit!, antideposit, integral, basis, electricfield
+export momentum, energydensity, chargedensity
 include("Plasmas.jl")
 export Plasma, Species
 include("TimeIntegrators.jl")
