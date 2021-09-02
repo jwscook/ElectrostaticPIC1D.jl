@@ -2,17 +2,30 @@
 struct Species{S<:AbstractShape}
   particles::Vector{Particle{S}}
 end
-Base.size(s::Species) = size(s.particles)
-Base.iterate(s::Species) = iterate(s.particles)
-Base.iterate(s::Species, state) = iterate(s.particles, state)
 
 @concrete struct Plasma
   species
 end
-Base.size(s::Plasma) = size(s.species)
-Base.iterate(s::Plasma) = iterate(s.species)
-Base.iterate(s::Plasma, state) = iterate(s.species, state)
 
+for (type, field) ∈ ((:Plasma, :species), (:Species, :particles))
+  for fun ∈ (:size, :iterate, :getindex, :length)
+    @eval Base.$(fun)(x::$(type)) = $(fun)(x.$(field))
+  end
+  for fun ∈ (:iterate, :getindex, :lastindex)
+    @eval Base.$(fun)(x::$(type), y) = $(fun)(x.$(field), y)
+  end
+end
+
+positions(s::Species) = [position(p) for p ∈ s]
+positions(p::Plasma) = [positions(s) for s ∈ p]
+velocities(s::Species) = [velocity(p) for p ∈ s]
+velocities(p::Plasma) = [velocities(s) for s ∈ p]
+energy(s::Species) = sum(weight(p) * velocity(p)^2 * mass(p)/2 for p ∈ s)
+energy(p::Plasma) = sum(energy.(p))
+momentum(s::Species) = sum(weight(p) * velocity(p) * mass(p) for p ∈ s)
+momentum(p::Plasma) = sum(momentum.(p))
+charge(s::Species) = sum(weight(p) * charge(p) for p ∈ s)
+charge(p::Plasma) = sum(charge.(p))
 
 function maxspeed(p::Plasma)
   output = 0.0
@@ -45,9 +58,9 @@ for op ∈ (:push!, :pushvelocity!)
 end
 
 for op ∈ (:pushposition!,)
-  @eval function $(op)(plasma::Plasma, dt)
+  @eval function $(op)(plasma::Plasma, dt, bc)
     for species ∈ plasma, particle ∈ species
-      $(op)(particle, dt)
+      $(op)(particle, dt, bc)
     end
     return plasma
   end

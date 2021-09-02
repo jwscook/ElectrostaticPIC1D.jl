@@ -105,6 +105,10 @@ function translate(b::BasisFunction, x::Number)
   translated.centre += x
   return translated
 end
+function translate!(b::BasisFunction, x::Number, bc::AbstractBC)
+  b.centre = bc(b.centre + x)
+  return b
+end
 Base.:+(b::BasisFunction, x) = (b.weight += x; b)
 Base.:+(x, b::BasisFunction) = x + b.weight
 Base.:+(a::BasisFunction, b::BasisFunction) = a.weight + b.weight
@@ -154,9 +158,22 @@ Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 
 BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
 
-function integral(b::BasisFunction, f, _::AbstractBC) where {F}
+function integral(b::BasisFunction, f::F, _::AbstractBC) where {F}
   return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b);
                        order=27, atol=eps(), rtol=eps())[1]
+end
+
+#function integral(u::BasisFunction, lims::Union{Tuple, AbstractVector})
+#  lower, upper = lims
+#  @assert lower < upper
+#  return integral(u, lower, upper)[1]
+#end
+
+function integral(u::BasisFunction{S1},
+                  v::BasisFunction{S2},
+                  p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
+  u, v = translate(u, v, p)
+  return in(u, v) ? integral(u, v) : 0.0
 end
 
 function integral(u::BasisFunction{BSpline{N1}}, v::BasisFunction{BSpline{N2}}
@@ -184,19 +201,6 @@ function integral(u::BasisFunction{BSpline{N}, T1},
   return integral(v, u)
 end
 
-
-function integral(u::BasisFunction, lims::Union{Tuple, AbstractVector})
-  lower, upper = lims
-  @assert lower < upper
-  return integral(u, lower, upper)[1]
-end
-
-function integral(u::BasisFunction{S1},
-                  v::BasisFunction{S2},
-                  p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
-  u, v = translate(u, v, p)
-  return in(u, v) ? integral(u, v) : 0.0
-end
 
 function integral(u::BasisFunction{TopHatShape}, v::BasisFunction{GaussianShape})
   return integral(v, u)
