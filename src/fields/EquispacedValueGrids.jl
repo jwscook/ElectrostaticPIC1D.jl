@@ -12,6 +12,8 @@ end
 Base.length(g::EquispacedValueGrid) = g.N
 Base.ndims(::Type{EquispacedValueGrid{BC, T}}) where {BC<:AbstractBC, T} = 1
 
+(g::EquispacedValueGrid)(x::AbstractFloat) = g.values[cell(x, g)]
+
 cellwidth(g::EquispacedValueGrid) = g.L / g.N
 cell(x, g::EquispacedValueGrid) = Int(floor(x / cellwidth(g))) + 1
 cellcentre(g::EquispacedValueGrid, i::Integer) = (i - 0.5) * cellwidth(g)
@@ -21,8 +23,9 @@ numberofunknowns(g::EquispacedValueGrid) = g.N
 function cellindices(a, b, g::EquispacedValueGrid)
   return Int(floor(a / cellwidth(g))):Int(ceil(b / cellwidth(g)))
 end
-basis(g, i) = BasisFunction(TopHatShape(cellwidth(g)), cellcentre(g, i))
-cells(g) = [basis(g, i) for i ∈ 1:g.N]
+basis(g, i) = BasisFunction(TopHatShape(cellwidth(g)), cellcentre(g, i), g.values[i])
+bases(g) = [basis(g, i) for i ∈ 1:g.N]
+
 function Base.intersect(x::BasisFunction{S, T1}, g::EquispacedValueGrid{BC, T2}
     ) where {S<:AbstractShape, BC, T1, T2}
   indlo = Int(floor(lower(x) / cellwidth(g) + 0.5)) 

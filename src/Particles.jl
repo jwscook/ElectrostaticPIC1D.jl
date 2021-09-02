@@ -24,8 +24,14 @@ mutable struct Particle{S<:AbstractShape} <: AbstractParticle
   velocity::Float64
 end
 function Particle(n::Nuclide, shape::AbstractShape=DeltaFunctionShape();
-    position::Float64=0.0, velocity::Float64=0.0, weight::Float64=0.0
-    ) where {S<:AbstractShape}
+    kwargstuple...) where {S<:AbstractShape}
+  kwargs = Dict(kwargstuple)
+  haskey(kwargs, :x) && (kwargs[:position] = kwargs[:x])
+  haskey(kwargs, :v) && (kwargs[:velocity] = kwargs[:v])
+  haskey(kwargs, :w) && (kwargs[:weight] = kwargs[:w])
+  position = get(kwargs, :position, 0.0)
+  velocity = get(kwargs, :velocity, 0.0)
+  weight = get(kwargs, :weight, 0.0)
   basis = BasisFunction(shape, position, weight)
   return Particle(n, basis, velocity)
 end
@@ -61,15 +67,15 @@ for op ∈ (:*, :/)
 end
 
 
-function pushposition!(p::Particle, dt)
-  p.basis = translate(p.basis, p.velocity * dt)
+function pushposition!(p::Particle, dt, bc::AbstractBC)
+  translate!(p.basis, p.velocity * dt, bc)
   return p
 end
 function pushvelocity!(p::Particle, E::Number, dt)
   p.velocity += charge_mass_ratio(p) * E * dt
   return p
 end
-Base.push!(p::Particle, E, dt) = (pushposition!(p, dt); pushvelocity!(p, E, dt); p)
+Base.push!(p::Particle, E, dt, bc) = (pushposition!(p, dt, bc); pushvelocity!(p, E, dt); p)
 
 function pushvelocity!(p::Particle, f::AbstractField, dt)
   return pushvelocity!(p, electricfield(f, p), dt)

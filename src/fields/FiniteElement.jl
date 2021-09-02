@@ -30,6 +30,8 @@ Base.size(f::FEMGrid) = (f.N,)
 Base.iterate(f::FEMGrid) = iterate(f.bases)
 Base.iterate(f::FEMGrid, state) = iterate(f.bases, state)
 Base.getindex(l::FEMGrid, i) = l.bases[i]
+bases(l::FEMGrid) = l.bases
+partitionunityweights(l::FEMGrid, i) = l.partitionunityweights[i]
 
 function Base.setindex!(l::FEMGrid, v, i)
   zero!(l.bases[i])
@@ -45,6 +47,7 @@ end
 zero!(f) = map(zero!, f)
 lower(l::FEMGrid) = 0.0
 upper(l::FEMGrid) = l.L
+domainsize(l::FEMGrid) = lower(l) - lower(l)
 
 #function solve(l::FEMGrid{BC}, f::F) where {BC, F}
 #  p = BC(lower(l), upper(l))
@@ -83,7 +86,7 @@ function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   qw = charge(particle) * weight(particle)
   for (index, item) ∈ intersect(basis(particle), l)
     amount = integral(item, basis(particle), bc)
-    item += amount * qw * l.partitionunityweights[index]
+    item += amount * qw * partitionunityweights(l, index)
   end
   return l
 end
@@ -93,7 +96,7 @@ function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(0.0, l.L)
   amount = 0.0
   for (index, item) ∈ intersect(basis(particle), l)
-    amount += integral(item, basis(particle), bc) * l.partitionunityweights[index] * weight(item)
+    amount += integral(item, basis(particle), bc) * partitionunityweights(l, index) * weight(item)
   end
   return amount
 end

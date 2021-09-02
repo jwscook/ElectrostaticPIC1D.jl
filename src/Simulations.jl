@@ -17,35 +17,46 @@ SimulationParameters(endtime, filenamestub) = SimulationParameters(endtime, file
   filenamestub::String
   time::Ref{Float64}
   iteration::Ref{Int}
+  diagnosticdumpcounter::Ref{Int}
 end
 
 function Simulation(plasma::Plasma, field::AbstractField, timeintegrator::AbstractTimeIntegrator;
   diagnosticdumpevery=1, endtime=10.0, filenamestub=nothing)
   isnothing(filenamestub) && (filenamestub = "$(typeof(eltype(plasma[1])))-$(typeof(field))-$(timeintegrator)-")
-  return Simulation(plasma, field, timeintegrator, diagnosticdumpevery, endtime, filenamestub, Ref(0.0), Ref(0))
+  return Simulation(plasma, field, timeintegrator, diagnosticdumpevery, endtime, filenamestub, Ref(0.0), Ref(0), Ref(0))
 end
 filenamestub(sim::Simulation) = sim.filenamestub
-filename(sim::Simulation) = sim.filenamestub * "$(iteration(sim))" * ".jld2"
+filename(filepathstub::String, i::Int) = filepathstub * lpad("$i", 6, "0") * ".jld2"
+filename(sim::Simulation) = filename(sim.filenamestub, diagnosticdumpcounter(sim))
 timestep(sim::Simulation) = timestep(sim.timeintegrator)
 iteration(sim::Simulation) = sim.iteration[]
+diagnosticdumpcounter(sim::Simulation) = sim.diagnosticdumpcounter[]
 time(sim::Simulation) = sim.time[]
 iterate!(sim::Simulation) = (sim.iteration[] += 1)
-save(sim::Simulation) = @save "$(filename(sim))" sim
+function save(sim::Simulation)
+  @save "$(filename(sim))" sim
+  sim.diagnosticdumpcounter[] += 1
+end
+function load(filepathstub::String, diagnosticdumpcount::Int)
+  @load "$(filename(filepathstub, diagnosticdumpcount))" sim
+  return sim
+end
 
 (sim::Simulation)() = run!(sim)
 
 function run!(sim::Simulation)
+  save(sim) # save initial conditions as file 0
   while time(sim) <= sim.endtime
     runtimestep!(sim)
   end
 end
 
 function runtimestep!(sim::Simulation)
+  integrate!(sim.plasma, sim.field, sim.timeintegrator)
+  sim.iteration[] += 1
+  sim.time[] += timestep(sim.timeintegrator)
   if mod(iteration(sim), sim.diagnosticdumpevery) == 0
     save(sim)
   end
-  integrate!(sim.plasma, sim.field, sim.timeintegrator)
-  @show sim.iteration[] += 1
-  sim.time[] += timestep(sim.timeintegrator)
 end
 
