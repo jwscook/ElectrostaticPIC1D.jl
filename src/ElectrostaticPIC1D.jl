@@ -28,7 +28,7 @@ export cellcentres, solve!, update!, cell, cells, cellsize, energydensity
 include("Particles.jl")
 export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
 export velocity, charge, mass, deposit!, antideposit, integral, basis, electricfield
-export momentum, energydensity, chargedensity
+export momentum, momentumdensity, energy, energydensity, charge, chargedensity
 include("Plasmas.jl")
 export Plasma, Species
 include("TimeIntegrators.jl")
