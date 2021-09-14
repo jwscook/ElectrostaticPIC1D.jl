@@ -36,7 +36,7 @@ for (field, fieldtypename) ∈  ((FourierField(NG,L), "Fourier"),)
     
     sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde, endtime=1.0, filenamestub=stub)
 
-    @test energy(sim.field) == 0.0 
+    @test energydensity(sim.field) == 0.0 
 
     expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
     expectedmomentum = 0.0
@@ -46,14 +46,14 @@ for (field, fieldtypename) ∈  ((FourierField(NG,L), "Fourier"),)
 
     for i in 1:dde:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
       sim_i = ElectrostaticPIC1D.load(stub, i)
-      particlecharge = charge(sim_i.plasma)
-      fieldcharge = charge(sim_i.field)
+      particlecharge = chargedensity(sim_i.plasma)
+      fieldcharge = chargedensity(sim_i.field)
       @test particlecharge ≈ expectedchargedensity
       @test fieldcharge ≈ expectedchargedensity
-      particleenergy = energy(sim_i.plasma)
-      fieldenergy = energy(sim_i.field)
+      particleenergy = energydensity(sim_i.plasma)
+      fieldenergy = energydensity(sim_i.field)
       @test particleenergy + fieldenergy ≈ expectedenergy rtol=0.01
-      particlemomentum = momentum(sim_i.plasma)
+      particlemomentum = momentumdensity(sim_i.plasma)
       @test particlemomentum ≈ expectedmomentum atol=sqrt(eps())
     end
 
