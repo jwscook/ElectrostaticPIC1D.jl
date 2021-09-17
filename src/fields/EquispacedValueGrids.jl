@@ -12,7 +12,7 @@ end
 Base.length(g::EquispacedValueGrid) = g.N
 Base.ndims(::Type{EquispacedValueGrid{BC, T}}) where {BC<:AbstractBC, T} = 1
 
-(g::EquispacedValueGrid)(x::AbstractFloat) = g.values[cell(x, g)]
+(g::EquispacedValueGrid)(x::AbstractFloat) = basis(g, cell(x, g))(x) * g.values[cell(x, g)]
 
 cellwidth(g::EquispacedValueGrid) = g.L / g.N
 cell(x, g::EquispacedValueGrid) = Int(floor(x / cellwidth(g))) + 1

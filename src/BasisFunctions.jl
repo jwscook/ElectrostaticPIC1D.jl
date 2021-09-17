@@ -1,6 +1,6 @@
 using FastGaussQuadrature, Memoization, SpecialFunctions
 
-const RTOL=sqrt(eps())
+const RTOL = sqrt(eps())
 
 abstract type AbstractShape end
 struct GaussianShape <: AbstractShape
@@ -161,15 +161,11 @@ Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
 
 function integral(b::BasisFunction, f::F, _::AbstractBC) where {F}
-  return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b);
-                       order=27, atol=eps(), rtol=RTOL)[1]
+  ks = knots(b)
+  return mapreduce(i->
+    QuadGK.quadgk(x->b(x) * f(x), ks[i], ks[i+1]; order=7, atol=eps(), rtol=RTOL)[1],
+    +, 1:length(ks)-1)
 end
-
-#function integral(u::BasisFunction, lims::Union{Tuple, AbstractVector})
-#  lower, upper = lims
-#  @assert lower < upper
-#  return integral(u, lower, upper)[1]
-#end
 
 function integral(u::BasisFunction{S1},
                   v::BasisFunction{S2},

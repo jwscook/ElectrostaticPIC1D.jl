@@ -13,20 +13,23 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
     return femgrid 
   end
 end
-function FEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
-                  ) where {BC<:AbstractBC, S<:AbstractShape}
-  return FEMGrid(N, L, S(L/N), BC)
-end
 
 function FEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
     ) where {BC<:AbstractBC, S<:AbstractShape}
   width(shape) > L && @error ArgumentError "Shapes must not be wider than the grid"
   Δ = L / N
-  bases = [BasisFunction(shape, (i-0.5) * Δ) for i ∈ 1:N]
+  bases = [BasisFunction(shape, i * Δ) for i ∈ 0:N-1]
   return FEMGrid{BC}(N, L, bases)
 end
+
+function FEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
+                  ) where {BC<:AbstractBC, S<:AbstractShape}
+  return FEMGrid(N, L, S(L/N), BC)
+end
+
 function (l::FEMGrid{BC})(x) where {BC}
   sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
+#  return sum(b(x, BC(0.0, l.L)) * weight(b) for (i, b) ∈ enumerate(l))
 end
 Base.size(f::FEMGrid) = (f.N,)
 Base.iterate(f::FEMGrid) = iterate(f.bases)
@@ -35,7 +38,7 @@ Base.getindex(l::FEMGrid, i) = l.bases[i]
 bases(l::FEMGrid) = l.bases
 partitionunityweights(l::FEMGrid, i) = l.partitionunityweights[i]
 
-function Base.setindex!(l::FEMGrid, v, i)
+function Base.setindex!(l::FEMGrid, v, i::Integer)
   zero!(l.bases[i])
   l.bases[i] += v
   return l
@@ -89,7 +92,7 @@ function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   qw = charge(particle) * weight(particle)
   for (index, item) ∈ intersect(basis(particle), l)
     amount = integral(item, basis(particle), bc)
-    item += amount * qw * partitionunityweights(l, index)
+    item += amount * qw
   end
   return l
 end
@@ -99,7 +102,7 @@ function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(0.0, l.L)
   amount = 0.0
   for (index, item) ∈ intersect(basis(particle), l)
-    amount += integral(item, basis(particle), bc) * partitionunityweights(l, index) * weight(item)
+    amount += integral(item, basis(particle), bc) * weight(item)
   end
   return amount
 end

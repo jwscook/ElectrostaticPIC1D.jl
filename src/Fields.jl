@@ -30,7 +30,10 @@ function energydensity(f::AbstractField{BC}; rtol=sqrt(eps())) where {BC}
 end
 function chargedensity(f::AbstractField{BC}) where {BC}
   bc = BC(0.0, domainsize(f))
-  return mapreduce(i->integral(i, x->1, bc) * weight(i), +, bases(f.charge)) / domainsize(f)
+  #@time a = mapreduce(i->integral(i, x->1, bc) * weight(i), +, bases(f.charge)) / domainsize(f)
+  #@time b = quadgk(x->f.charge(x), 0, domainsize(f), rtol=eps())[1] / domainsize(f) # TODO - make faster
+  #@show b / a
+  return mapreduce(b->integral(b, x->1, bc) * weight(b), +, bases(f.charge)) / domainsize(f)
 end
 
 function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:AbstractField}
