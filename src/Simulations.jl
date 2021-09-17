@@ -23,7 +23,7 @@ end
 function Simulation(plasma::Plasma, field::AbstractField, timeintegrator::AbstractTimeIntegrator;
   diagnosticdumpevery=1, endtime=10.0, filenamestub=nothing)
   isnothing(filenamestub) && (filenamestub = "$(typeof(eltype(plasma[1])))-$(typeof(field))-$(timeintegrator)-")
-  return Simulation(plasma, field, timeintegrator, diagnosticdumpevery, endtime, filenamestub, Ref(0.0), Ref(0), Ref(0))
+  return Simulation(plasma, field, timeintegrator, diagnosticdumpevery, endtime, filenamestub, Ref(0.0), Ref(0), Ref(-1))
 end
 filenamestub(sim::Simulation) = sim.filenamestub
 filename(filepathstub::String, i::Int) = filepathstub * lpad("$i", 6, "0") * ".jld2"
@@ -34,8 +34,8 @@ diagnosticdumpcounter(sim::Simulation) = sim.diagnosticdumpcounter[]
 time(sim::Simulation) = sim.time[]
 iterate!(sim::Simulation) = (sim.iteration[] += 1)
 function save(sim::Simulation)
-  @save "$(filename(sim))" sim
   sim.diagnosticdumpcounter[] += 1
+  @save "$(filename(sim))" sim
 end
 function load(filepathstub::String, diagnosticdumpcount::Int)
   @load "$(filename(filepathstub, diagnosticdumpcount))" sim

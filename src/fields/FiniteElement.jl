@@ -8,7 +8,9 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
       puw=zeros(T, N)) where {BC<:AbstractBC, S<:AbstractShape, T}
     dummy = new{BC, S, T}(N, L, bases, puw)
     puw = solve(dummy, x->1)
-    return new{BC, S, T}(N, L, bases, puw)
+    femgrid = new{BC, S, T}(N, L, bases, puw)
+    zero!(femgrid)
+    return femgrid 
   end
 end
 function FEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
@@ -44,10 +46,11 @@ function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:FEMGrid}
 end
 
 
-zero!(f) = map(zero!, f)
+zero!(f::FEMGrid) = map(zero!, f)
 lower(l::FEMGrid) = 0.0
 upper(l::FEMGrid) = l.L
 domainsize(l::FEMGrid) = lower(l) - lower(l)
+numberofunknowns(l::FEMGrid) = length(l.bases)
 
 #function solve(l::FEMGrid{BC}, f::F) where {BC, F}
 #  p = BC(lower(l), upper(l))
@@ -122,12 +125,15 @@ struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractFEMField{BC}
   end
 end
 LSFEMField(a::FEMGrid) = LSFEMField(a, deepcopy(a))
+LSFEMField(N::Int, L::Real, shape::S) where {S<:AbstractShape} = LSFEMField(FEMGrid(N, L, shape))
 Base.size(l::AbstractFEMField) = (size(l.charge),)
 Base.length(l::AbstractFEMField) = length(l.charge)
 
 lower(l::AbstractFEMField) = 0.0
 upper(l::AbstractFEMField) = l.charge.L
+numberofunknowns(l::AbstractFEMField) = numberofunknowns(l.charge)
 
+zero!(f::AbstractFEMField) = map(zero!, (f.charge, f.electricfield))
 
 struct GalerkinFEMField{BC, S1<:AbstractShape, S2<:AbstractShape, T
     } <: AbstractFEMField{BC}
@@ -139,7 +145,10 @@ struct GalerkinFEMField{BC, S1<:AbstractShape, S2<:AbstractShape, T
     return new{BC,S1,S2,T}(charge, electricfield)
   end
 end
-
+function GalerkinFEMField(N::Int, L::Real, chargeshape::S1, efieldshape::S2
+  ) where {S1<:AbstractShape, S2<:AbstractShape}
+  return GalerkinFEMField(FEMGrid(N, L, chargeshape), FEMGrid(N,L, efieldshape))
+end
 
 # Pull a special trick to solve circulant matrix that pops out of periodic BCs
 """

@@ -30,7 +30,7 @@ export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
 export velocity, charge, mass, deposit!, antideposit, integral, basis, electricfield
 export momentum, momentumdensity, energy, energydensity, charge, chargedensity
 include("Plasmas.jl")
-export Plasma, Species
+export Plasma, Species, positions, velocities
 include("TimeIntegrators.jl")
 export LeapFrogTimeIntegrator, LeapFrogTimeIntegrator
 include("Simulations.jl")
