@@ -95,4 +95,5 @@ end
 overlap(b::BasisFunction, p::Particle) = overlap(b, basis(p))
 Base.intersect(p::Particle, x) = intersect(basis(p), x)
 
+integral(p::Particle) = integral(basis(p))
 

@@ -109,3 +109,5 @@ function solve!(f::FiniteDifferenceField)
   return f
 end
 
+zero!(f::FiniteDifferenceField) = (zero!(f.charge); zero!(f.electricfield))
+

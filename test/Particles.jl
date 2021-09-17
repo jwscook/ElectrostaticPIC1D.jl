@@ -74,5 +74,58 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
     end
   end
 
+  @testset "Lots of particles tests" begin
+    NG = 8
+    NP = NG * 4
+    L = 1.0# rand()
+    Δ = L / NG
+    nuclide = Nuclide(rand(2)...)
+
+    physicaldensity = NP / L#make weight unity #rand()
+    weight = physicaldensity * L / NP
+
+    particleshapes = ((DeltaFunctionShape(), "Delta"),
+                      (GaussianShape(Δ), "Gaussian"),
+                      (BSpline{0}(Δ), "BSpline0"),
+                      (BSpline{1}(Δ), "BSpline1"),
+                      (BSpline{2}(Δ), "BSpline2"),)
+
+    fieldsolvers = (
+    #  (FourierField(NG,L), "Fourier"),
+     (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
+     (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
+     (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
+     (GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
+     (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+    #  (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
+    #  (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
+    #  (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
+      )
+
+    xs = collect(0:1/NP:1-1/NP) .* L # equi-spaced
+
+    for (particleshape, pname) ∈ particleshapes
+      species = Species([Particle(nuclide, particleshape; x=x, v=0.0, w=weight) for x in xs])
+
+      expectedchargedensity = weight * NP * charge(nuclide)
+      plasma = Plasma([species])
+
+      @test expectedchargedensity ≈ chargedensity(plasma)
+
+      for (field, fname) ∈  fieldsolvers
+        @testset  "$fname-$pname" begin
+          ElectrostaticPIC1D.zero!(field)
+          deposit!(field, plasma)
+          @show ElectrostaticPIC1D.weight.(field.charge.bases)
+          r = chargedensity(field) / expectedchargedensity
+          @show r, fname, pname
+          #@test chargedensity(field) ≈ expectedchargedensity
+          solve!(field)
+        end
+      end
+    end
+
+  end
+
 
 end

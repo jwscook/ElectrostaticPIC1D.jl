@@ -156,7 +156,7 @@ end
     p = findpower(1 ./ Ns, nrms)
     @test all(nrms .< 0.01)
   end
-  end # Lease Squares
+  end # Least Squares
 
 end
 
