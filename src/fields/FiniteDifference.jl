@@ -98,6 +98,9 @@ function FiniteDifferenceField(charge::EquispacedValueGrid{PeriodicGridBC};
   integrator = PeriodicFiniteIntegratorOperator(N, charge.L, order)
   return FiniteDifferenceField(charge, electricfield, integrator)
 end
+function FiniteDifferenceField(N::Int, L::Real, ::Type{BC}=PeriodicGridBC; order::Int=2) where {BC}
+  return FiniteDifferenceField(EquispacedValueGrid(N, L, BC), order=order)
+end
 
 order(f::FiniteDifferenceField{BC,T,A}) where {BC,T,A} = A
 

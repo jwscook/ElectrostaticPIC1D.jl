@@ -1,5 +1,7 @@
 using FastGaussQuadrature, Memoization, SpecialFunctions
 
+const RTOL=sqrt(eps())
+
 abstract type AbstractShape end
 struct GaussianShape <: AbstractShape
   σ::Float64
@@ -160,7 +162,7 @@ BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), cent
 
 function integral(b::BasisFunction, f::F, _::AbstractBC) where {F}
   return QuadGK.quadgk(x->b(x) * f(x), lower(b), upper(b);
-                       order=27, atol=eps(), rtol=eps())[1]
+                       order=27, atol=eps(), rtol=RTOL)[1]
 end
 
 #function integral(u::BasisFunction, lims::Union{Tuple, AbstractVector})
@@ -193,8 +195,10 @@ function integral(u::BasisFunction{BSpline{N1}}, v::BasisFunction{BSpline{N2}}
 end
 function integral(u::BasisFunction{GaussianShape, T1},
                   v::BasisFunction{BSpline{N}, T2}) where {T1, N, T2}
-  return QuadGK.quadgk(x->u(x) * v(x), lower(u), upper(v);
-                       order=27, atol=eps(), rtol=eps())[1]
+  ks = knots(v)
+  return mapreduce(i->
+    QuadGK.quadgk(x->u(x) * v(x), ks[i], ks[i+1]; order=7, atol=eps(), rtol=RTOL)[1],
+    +, 1:length(ks)-1)
 end
 function integral(u::BasisFunction{BSpline{N}, T1},
                   v::BasisFunction{GaussianShape, T2}) where {N, T1, T2}
