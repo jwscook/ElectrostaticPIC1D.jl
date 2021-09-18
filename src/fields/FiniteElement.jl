@@ -18,7 +18,7 @@ function FEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
     ) where {BC<:AbstractBC, S<:AbstractShape}
   width(shape) > L && @error ArgumentError "Shapes must not be wider than the grid"
   Δ = L / N
-  bases = [BasisFunction(shape, i * Δ) for i ∈ 0:N-1]
+  bases = [BasisFunction(shape, (i-0.5) * Δ) for i ∈ 1:N]
   return FEMGrid{BC}(N, L, bases)
 end
 
@@ -90,9 +90,9 @@ function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   # loop over all items in lthat particle overlaps with
   bc = BC(0.0, l.L)
   qw = charge(particle) * weight(particle)
-  for (index, item) ∈ intersect(basis(particle), l)
+  for (index, item) ∈ enumerate(l)#intersect(basis(particle), l)
     amount = integral(item, basis(particle), bc)
-    item += amount * qw
+    item += amount * qw * partitionunityweights(l, index)
   end
   return l
 end
@@ -101,8 +101,8 @@ function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   # loop over all items in lthat particle overlaps with
   bc = BC(0.0, l.L)
   amount = 0.0
-  for (index, item) ∈ intersect(basis(particle), l)
-    amount += integral(item, basis(particle), bc) * weight(item)
+  for (index, item) ∈ enumerate(l)#intersect(basis(particle), l)
+    amount += integral(item, basis(particle), bc) * weight(item) * partitionunityweights(l, index)
   end
   return amount
 end

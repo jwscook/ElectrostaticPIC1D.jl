@@ -1,6 +1,6 @@
 using FastGaussQuadrature, Memoization, SpecialFunctions
 
-const RTOL = sqrt(eps())
+const RTOL = eps()
 
 abstract type AbstractShape end
 struct GaussianShape <: AbstractShape
