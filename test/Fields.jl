@@ -79,7 +79,7 @@ end
       update!(chargegrid, frho)
       f = FEMFieldType(chargegrid, efieldgrid)
       rhoresult = f.charge.(x)
-      @test rhoresult ≈ rhoexpected atol=0 rtol=2eps()
+      @test rhoresult ≈ rhoexpected atol=0 rtol=100eps()
       solve!(f)
       efieldresult = f.electricfield.(x)
 

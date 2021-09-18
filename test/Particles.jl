@@ -1,4 +1,4 @@
-using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
+using ElectrostaticPIC1D, Random, Statistics, Test; Random.seed!(0)
 
 
 @testset "Particles" begin
@@ -75,7 +75,7 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
   end
 
   @testset "Lots of particles tests" begin
-    NG = 8
+    NG = 32
     NP = NG * 4
     L = 1.0# rand()
     Δ = L / NG
@@ -91,15 +91,15 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
                       (BSpline{2}(Δ), "BSpline2"),)
 
     fieldsolvers = (
-    #  (FourierField(NG,L), "Fourier"),
-     (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
-     (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
-     (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-     (GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
-     (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
-    #  (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
-    #  (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
-    #  (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
+      (FourierField(NG,L), "Fourier"),
+      (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
+      (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
+      (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
+      (GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
+      (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+      (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
+      (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
+      (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
       )
 
     xs = collect(0:1/NP:1-1/NP) .* L # equi-spaced
@@ -116,11 +116,10 @@ using ElectrostaticPIC1D, Random, Test; Random.seed!(0)
         @testset  "$fname-$pname" begin
           ElectrostaticPIC1D.zero!(field)
           deposit!(field, plasma)
-          @show ElectrostaticPIC1D.weight.(field.charge.bases)
+          qs = field.charge.(xs)
+          @test sqrt(mean((qs .- mean(qs)).^2)) ./ mean(qs) < 1e-6
           r = chargedensity(field) / expectedchargedensity
-          @show r, fname, pname
-          #@test chargedensity(field) ≈ expectedchargedensity
-          solve!(field)
+          @test chargedensity(field) ≈ expectedchargedensity
         end
       end
     end

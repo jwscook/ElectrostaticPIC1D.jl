@@ -51,13 +51,13 @@ function update!(f::AbstractField, species)
   return f
 end
 
-function Base.intersect(x::BasisFunction,
-                        g::AbstractGrid{BC}) where {BC}
-  bc = BC(0.0, domainsize(g))
-  accept(b) = (ab = translate(x, b, bc); in(ab...))
-  return ((i, b) for (i, b) ∈ enumerate(g) if accept(b))
-end
-
+#function Base.intersect(x::BasisFunction,
+#                        g::AbstractGrid{BC}) where {BC}
+#  bc = BC(0.0, domainsize(g))
+#  accept(b) = (ab = translate(x, b, bc); in(ab...))
+#  return ((i, b) for (i, b) ∈ enumerate(g) if accept(b))
+#end
+#
 function cellcentres(f::AbstractField)
   return ((1:numberofunknowns(f)) .- 0.5) * domainsize(f) / numberofunknowns(f)
 end
