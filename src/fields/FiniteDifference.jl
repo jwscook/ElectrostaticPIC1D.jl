@@ -52,51 +52,51 @@ function (p::PeriodicFiniteIntegratorOperator{1})(z, y)
   for i ∈ 2:length(z)
     z[i] = z[i-1] + y[i] * p.Δ
   end
-  return demean!(z) 
+  return z
 end
 function (p::PeriodicFiniteIntegratorOperator{2})(z, y)
   z[1] = (y[end]/4 + 3y[1]/4) * p.Δ
   for i in 2:length(z)
     z[i] = z[i-1] + (y[i-1] + y[i])/2 * p.Δ
   end
-  return demean!(z) 
+  return z
 end
 # this operator is 4th order accurate despite using a 3 point stencil
 function (p::PeriodicFiniteIntegratorOperator{3})(z, y)
   fill!(z, 0)
-  z[1] = integratepoly([y[end], y[1], y[2]], 0.5, 1)
-  z[2] = integratepoly([y[end], y[1], y[2]], 1, 1.5)
+  z[1] = integratepoly([y[end], y[1], y[2]], 0.5, 1) * p.Δ
+  z[2] = integratepoly([y[end], y[1], y[2]], 1, 1.5) * p.Δ
   for i in 2:length(z)-1
-    z[i] += z[i-1] + integratepoly(y[i-1:i+1], 0.5, 1)
-    z[i+1] += integratepoly(y[i-1:i+1], 1, 1.5)
+    z[i] += z[i-1] + integratepoly(y[i-1:i+1], 0.5, 1) * p.Δ
+    z[i+1] += integratepoly(y[i-1:i+1], 1, 1.5) * p.Δ
   end
-  z[end] += z[end-1] + integratepoly([y[end-1], y[end], y[1]], 0.5, 1)
-  return demean!(z) * p.Δ
+  z[end] += z[end-1] + integratepoly([y[end-1], y[end], y[1]], 0.5, 1) * p.Δ
+  return z
 end
 function (p::PeriodicFiniteIntegratorOperator{4})(z, y)
-  z[1] = integratepoly([y[end-1], y[end], y[1], y[2]], 1.5, 2)
-  z[2] = z[1] + integratepoly([y[end], y[1], y[2], y[3]], 1, 2)
+  z[1] = integratepoly([y[end-1], y[end], y[1], y[2]], 1.5, 2) * p.Δ
+  z[2] = z[1] + integratepoly([y[end], y[1], y[2], y[3]], 1, 2) * p.Δ
   for i in 3:length(z)-1
-    z[i] = z[i-1] + integratepoly(y[i-2:i+1], 1, 2)
+    z[i] = z[i-1] + integratepoly(y[i-2:i+1], 1, 2) * p.Δ
   end
-  z[end] = z[end-1] + integratepoly([y[end-2], y[end-1], y[end], y[1]], 1, 2)
-  return demean!(z) * p.Δ
+  z[end] = z[end-1] + integratepoly([y[end-2], y[end-1], y[end], y[1]], 1, 2) * p.Δ
+  return z
 end
 (p::PeriodicFiniteIntegratorOperator{A,T})(y) where {A,T} = p(deepcopy(y), y)
 
 
 struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
-  charge::EquispacedValueGrid{BC,T}
+  chargedensity::EquispacedValueGrid{BC,T}
   electricfield::EquispacedValueGrid{BC,T}
   integrator::PeriodicFiniteIntegratorOperator{A,T}
 end
-function FiniteDifferenceField(charge::EquispacedValueGrid{PeriodicGridBC};
+function FiniteDifferenceField(chargedensity::EquispacedValueGrid{PeriodicGridBC};
                                order::Int=2)
-  electricfield = deepcopy(charge)
+  electricfield = deepcopy(chargedensity)
   zero!(electricfield)
-  N = first(size(charge))
-  integrator = PeriodicFiniteIntegratorOperator(N, charge.L, order)
-  return FiniteDifferenceField(charge, electricfield, integrator)
+  N = first(size(chargedensity))
+  integrator = PeriodicFiniteIntegratorOperator(N, chargedensity.L, order)
+  return FiniteDifferenceField(chargedensity, electricfield, integrator)
 end
 function FiniteDifferenceField(N::Int, L::Real, ::Type{BC}=PeriodicGridBC; order::Int=2) where {BC}
   return FiniteDifferenceField(EquispacedValueGrid(N, L, BC), order=order)
@@ -104,10 +104,13 @@ end
 
 order(f::FiniteDifferenceField{BC,T,A}) where {BC,T,A} = A
 
-function solve!(f::FiniteDifferenceField)
-  f.electricfield .= f.integrator(f.charge)
+presolve(g::EquispacedValueGrid{PeriodicGridBC}) = g .- mean(g)
+presolve(g::EquispacedValueGrid{<:AbstractBC}) = g
+function solve!(f::FiniteDifferenceField{PeriodicGridBC})
+  ρ = presolve(f.chargedensity)
+  f.electricfield .= demean!(f.integrator(ρ))
   return f
 end
 
-zero!(f::FiniteDifferenceField) = (zero!(f.charge); zero!(f.electricfield))
+zero!(f::FiniteDifferenceField) = (zero!(f.chargedensity); zero!(f.electricfield))
 

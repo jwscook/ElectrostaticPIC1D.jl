@@ -79,6 +79,19 @@ for V ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
              order=51, atol=0, rtol=eps())[1]
     end
     expected < eps() && continue
+    try
+      @inferred integral(u, v)
+      @test true
+    catch
+      @test false
+    end
+    try
+      @inferred integral(u, v, PeriodicGridBC(1.0))
+      @test true
+    catch
+      @warn "integral($U, $V) cannot be inferred"
+      @test false
+    end
     result = integral(u, v)
     @test result ≈ expected atol=100eps()
     break

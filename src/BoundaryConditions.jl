@@ -6,6 +6,7 @@ struct PeriodicGridBC <: AbstractBC
   lower::Float64
   upper::Float64
 end
+PeriodicGridBC(x) = PeriodicGridBC(0.0, x)
 
 Base.length(p::PeriodicGridBC) = p.upper - p.lower
 Base.in(x::Number, p::PeriodicGridBC) = p.lower <= x < p.upper

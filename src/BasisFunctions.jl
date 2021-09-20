@@ -147,8 +147,8 @@ end
 (b::BasisFunction)(x::Number) = b.shape(x, b.centre)
 function (b::BasisFunction)(x::Number, p::PeriodicGridBC)
   in(x, b) && return b(x)
-  in(x, translate(b, length(p))) && return translate(b, length(p))(x)
-  in(x, translate(b,-length(p))) && return translate(b,-length(p))(x)
+  t = translate(b, length(p)); in(x, t) && return t(x)
+  t = translate(b,-length(p)); in(x, t) && return t(x)
   return b(x)
 end
 
@@ -159,6 +159,10 @@ end
 Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 
 BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
+
+function integral(b::BasisFunction{DeltaFunctionShape}, f::F, _::AbstractBC) where {F}
+  return f(centre(b))
+end
 
 function integral(b::BasisFunction, f::F, _::AbstractBC) where {F}
   ks = knots(b)
