@@ -3,12 +3,9 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
   L::Float64
   bases::Vector{BasisFunction{S, T}}
-  partitionunityweights::Vector{T}
-  function FEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}},
-      puw=zeros(T, N)) where {BC<:AbstractBC, S<:AbstractShape, T}
-    dummy = new{BC, S, T}(N, L, bases, puw)
-    puw = solve(dummy, x->1)
-    femgrid = new{BC, S, T}(N, L, bases, puw)
+  function FEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}}
+      ) where {BC<:AbstractBC, S<:AbstractShape, T}
+    femgrid = new{BC, S, T}(N, L, bases)
     zero!(femgrid)
     return femgrid 
   end
@@ -28,15 +25,13 @@ function FEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
 end
 
 function (l::FEMGrid{BC})(x) where {BC}
-  sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
-#  return sum(b(x, BC(0.0, l.L)) * weight(b) for (i, b) ∈ enumerate(l))
+  return sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
 end
 Base.size(f::FEMGrid) = (f.N,)
 Base.iterate(f::FEMGrid) = iterate(f.bases)
 Base.iterate(f::FEMGrid, state) = iterate(f.bases, state)
 Base.getindex(l::FEMGrid, i) = l.bases[i]
 bases(l::FEMGrid) = l.bases
-partitionunityweights(l::FEMGrid, i) = l.partitionunityweights[i]
 
 function Base.setindex!(l::FEMGrid, v, i::Integer)
   zero!(l.bases[i])
@@ -87,22 +82,20 @@ function solve(l::FEMGrid{BC}, f::F) where {BC, F}
 end
 
 function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
-  # loop over all items in lthat particle overlaps with
-  bc = BC(0.0, l.L)
+  bc = BC(l.L)
   qw = charge(particle) * weight(particle)
-  for (index, item) ∈ enumerate(l)#intersect(basis(particle), l)
-    amount = integral(item, basis(particle), bc)
-    item += amount * qw * partitionunityweights(l, index)
+  for (index, item) ∈ enumerate(l)#
+    amount = integral(item, basis(particle), bc) / length(l)
+    item += amount * qw
   end
   return l
 end
 
 function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
-  # loop over all items in lthat particle overlaps with
-  bc = BC(0.0, l.L)
+  bc = BC(l.L)
   amount = 0.0
-  for (index, item) ∈ enumerate(l)#intersect(basis(particle), l)
-    amount += integral(item, basis(particle), bc) * weight(item) * partitionunityweights(l, index)
+  for (index, item) ∈ enumerate(l)#
+    amount += integral(item, basis(particle), bc) * weight(item)
   end
   return amount
 end
@@ -118,34 +111,34 @@ end
 abstract type AbstractFEMField{BC} <: AbstractField{BC} end
 
 struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractFEMField{BC}
-  charge::FEMGrid{BC,S,T}
+  chargedensity::FEMGrid{BC,S,T}
   electricfield::FEMGrid{BC,S,T}
-  function LSFEMField(charge::L, electricfield::L
+  function LSFEMField(chargedensity::L, electricfield::L
       ) where {BC,S,T,L<:FEMGrid{BC,S,T}}
-    @assert charge.N == electricfield.N
-    @assert charge.L == electricfield.L
-    return new{BC,S,T}(charge, electricfield)
+    @assert chargedensity.N == electricfield.N
+    @assert chargedensity.L == electricfield.L
+    return new{BC,S,T}(chargedensity, electricfield)
   end
 end
 LSFEMField(a::FEMGrid) = LSFEMField(a, deepcopy(a))
 LSFEMField(N::Int, L::Real, shape::S) where {S<:AbstractShape} = LSFEMField(FEMGrid(N, L, shape))
-Base.size(l::AbstractFEMField) = (size(l.charge),)
-Base.length(l::AbstractFEMField) = length(l.charge)
+Base.size(l::AbstractFEMField) = (size(l.chargedensity),)
+Base.length(l::AbstractFEMField) = length(l.chargedensity)
 
 lower(l::AbstractFEMField) = 0.0
-upper(l::AbstractFEMField) = l.charge.L
-numberofunknowns(l::AbstractFEMField) = numberofunknowns(l.charge)
+upper(l::AbstractFEMField) = l.chargedensity.L
+numberofunknowns(l::AbstractFEMField) = numberofunknowns(l.chargedensity)
 
-zero!(f::AbstractFEMField) = map(zero!, (f.charge, f.electricfield))
+zero!(f::AbstractFEMField) = map(zero!, (f.chargedensity, f.electricfield))
 
 struct GalerkinFEMField{BC, S1<:AbstractShape, S2<:AbstractShape, T
     } <: AbstractFEMField{BC}
-  charge::FEMGrid{BC,S1,T}
+  chargedensity::FEMGrid{BC,S1,T}
   electricfield::FEMGrid{BC,S2,T}
-  function GalerkinFEMField(charge::FEMGrid{BC,S1,T}, electricfield::FEMGrid{BC,S2,T}
+  function GalerkinFEMField(chargedensity::FEMGrid{BC,S1,T}, electricfield::FEMGrid{BC,S2,T}
       ) where {BC,S1,S2,T}
-    @assert charge.L == electricfield.L
-    return new{BC,S1,S2,T}(charge, electricfield)
+    @assert chargedensity.L == electricfield.L
+    return new{BC,S1,S2,T}(chargedensity, electricfield)
   end
 end
 function GalerkinFEMField(N::Int, L::Real, chargeshape::S1, efieldshape::S2
@@ -157,7 +150,7 @@ end
 """
     gausslawsolve(f::AbstractFEMField{PeriodicGridBC})
 
-Solve Gauss's law to obtain the electric field from the charge
+Solve Gauss's law to obtain the electric field from the chargedensity
 The periodic boundary condition creates a circulant Symmetric matrix,
 which can be solved via FFTs (n log n).
 
@@ -175,22 +168,28 @@ Other solution methods are eigen decomposition (n^3) and regularisation.
 @memoize function gausslawsolve(field::AbstractFEMField{PeriodicGridBC})
   A = massmatrix(field)
   b = forcevector(field)
-  if Circulant(A) ≈ A
+  x = if Circulant(A) ≈ A
     c = fft(A[:, 1])
-    c[1] = 1 # 1st mode (eigenvalue) is zero
+    c[1] = 1 # 1st mode (eigenvalue) is zero; will * by false later
     o = fft(b) ./ c
-    o[1] *= false # don't divide by zero
-    return real.(ifft(o))
+    o[1] *= false # PeriodicGridBC means we want zero DC offset
+    for i ∈ eachindex(o) # incase we are dividing by any other zeros
+      isnan(o[i]) && (o[i] *= false)
+    end
+    real.(ifft(o))
   elseif rank(Matrix(A)) == size(A, 1) # is non-singular
-    return demean!(A \ b)
+    demean!(A \ b)
   else
     u, v = eigen(Matrix(A))
     idu = 1 ./ u
     idu[end] *= false # just like ignoring 0th Fourier mode?
     A⁻¹ = real.(v * diagm(idu) * inv(v))
-    return demean!(A⁻¹ * b)
+    demean!(A⁻¹ * b)
   end
+  @assert !any(isnan.(x))
+  return x
 end
+using JLD2
 @memoize function gausslawsolve(f::AbstractFEMField{BC}) where {BC}
   A = massmatrix(f)
   b = forcevector(f)
@@ -208,7 +207,7 @@ function solve!(f::AbstractFEMField{BC}) where {BC}
     b = forcevector(f)
     @save "solve!_$(typeof(f)).jld2" f err
     @warn "Caught $err, saved field struct, and exiting."
-    rethrow()
+    rethrow(err)
   end
   f.electricfield .= postsolve!(x, BC)
   return f
@@ -270,11 +269,11 @@ massmatrixmatrixtype(_) = SparseMatrixCSC
                 massmatrixmatrixtype(f))
 end
 @memoize function normalisedstiffnessmatrix(f::AbstractFEMField)
-  return matrix(f.charge, f.charge, stiffnessmatrixintegral(f))
+  return matrix(f.chargedensity, f.chargedensity, stiffnessmatrixintegral(f))
 end
 
 function forcevector(f::AbstractFEMField)
-  return normalisedstiffnessmatrix(f) * weight.(f.charge)
+  return normalisedstiffnessmatrix(f) * weight.(f.chargedensity)
 end
 
 

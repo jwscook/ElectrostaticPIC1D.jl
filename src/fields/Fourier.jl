@@ -12,24 +12,24 @@ end
 Base.length(p::PeriodicFourierWorkspace) = length(p.ik)
 
 struct FourierField{BC<:PeriodicGridBC, T} <: AbstractField{BC}
-  charge::EquispacedValueGrid{BC,T}
+  chargedensity::EquispacedValueGrid{BC,T}
   electricfield::EquispacedValueGrid{BC,T}
   helper::PeriodicFourierWorkspace
 end
 function FourierField(N::Int, L::Real)
   return FourierField(EquispacedValueGrid(N, L, PeriodicGridBC))
 end
-function FourierField(charge::EquispacedValueGrid{PeriodicGridBC})
-  electricfield = deepcopy(charge)
+function FourierField(chargedensity::EquispacedValueGrid{PeriodicGridBC})
+  electricfield = deepcopy(chargedensity)
   zero!(electricfield)
-  return FourierField(charge, electricfield,
-    PeriodicFourierWorkspace(first(size(charge)), charge.L))
+  return FourierField(chargedensity, electricfield,
+    PeriodicFourierWorkspace(first(size(chargedensity)), chargedensity.L))
 end
 
-zero!(f::FourierField) = (zero!(f.charge), zero!(f.electricfield))
+zero!(f::FourierField) = (zero!(f.chargedensity), zero!(f.electricfield))
 
 function solve!(f::FourierField)
-  f.helper.workvector .= f.charge
+  f.helper.workvector .= f.chargedensity
   fft!(f.helper.workvector)
   f.helper.workvector ./= f.helper.ik
   f.helper.workvector[1] *= false

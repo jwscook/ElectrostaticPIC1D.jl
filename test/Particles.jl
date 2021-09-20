@@ -1,4 +1,4 @@
-using ElectrostaticPIC1D, Random, Statistics, Test; Random.seed!(0)
+using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
 
 
 @testset "Particles" begin
@@ -28,67 +28,39 @@ using ElectrostaticPIC1D, Random, Statistics, Test; Random.seed!(0)
     @test position(particle) .== mod(pos + 2vel * dt, 1.0)
   end
 
-  @testset "Deposition" begin
-    @testset "DeltaFunctionShape, EquispacedValueGrid" begin
-      shape = DeltaFunctionShape()
-      for _ ∈ 1:1
-        N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), rand(), rand()
-        p = Particle(Nuclide(q, 1.0), shape;
-                     position=rand()*L, velocity=0.0, weight=w)
-        @test weight(p) == w
-        @test charge(p) == q
-        rho = EquispacedValueGrid(N, L)
-        f = FourierField(rho)
-        deposit!(f, p)
-        particleindex = cell(centre(p), rho)
-        @test f.charge[particleindex] ≈ w * q rtol=eps()
-        deposit!(f, p)
-        @test f.charge[particleindex] ≈ 2w * q rtol=eps()
-        E = rand()
-        f.electricfield .= E
-        @test antideposit(f, p) ≈ E rtol=eps()
-      end
-    end
-    @testset "DeltaFunctionShape, LSFEM TopHatShapes" begin
-      shape = DeltaFunctionShape()
-      for _ ∈ 1:1
-        N, L, w, q = Int(exp2(rand(3:8))), 10.0 * rand(), 3*rand(), rand()
-        p = Particle(Nuclide(q, 1.0), shape;
-                     position=rand()*L, velocity=0.0, weight=w)
-        @test weight(p) == w
-        @test charge(p) == q
-        rho = FEMGrid(N, L, TopHatShape)
-        f = LSFEMField(rho)
-        deposit!(f, p)
-        for i in f.charge
-          if in(i, basis(p))
-            @test weight(i) ≈ w * q rtol=eps()
-          else
-            @test weight(i) == 0.0
-          end
-        end
-        E = rand()
-        f.electricfield .= E
-        @test antideposit(f, p) ≈ E rtol=eps()
-      end
+  @testset "Particles basis functions are normalised" begin
+    nuclide = Nuclide(rand(2)...)
+    Δ = rand()
+    particleshapes = ((BSpline{0}(Δ), "BSpline0"),
+                      (BSpline{1}(Δ), "BSpline1"),
+                      (BSpline{2}(Δ), "BSpline2"),
+                      (DeltaFunctionShape(), "Delta"),
+                      (GaussianShape(Δ), "Gaussian"),)
+    for (particleshape, pname) ∈ particleshapes
+      part = Particle(nuclide, particleshape; x=rand(), v=rand(), w=rand())
+      b = ElectrostaticPIC1D.basis(part)
+      area = ElectrostaticPIC1D.integral(b, x->1,
+        ElectrostaticPIC1D.PeriodicGridBC(1.0))
+      @test area ≈ 1
     end
   end
 
   @testset "Lots of particles tests" begin
-    NG = 32
-    NP = NG * 4
-    L = 1.0# rand()
+    NG = 128 # number of grid points / basis functions
+    NPPC = 2 # number of particle per cell
+    NP = NG * NPPC
+    L = 1.0 # rand()
     Δ = L / NG
     nuclide = Nuclide(rand(2)...)
 
     physicaldensity = NP / L#make weight unity #rand()
-    weight = physicaldensity * L / NP
+    weight0 = physicaldensity * L / NP
 
-    particleshapes = ((DeltaFunctionShape(), "Delta"),
-                      (GaussianShape(Δ), "Gaussian"),
-                      (BSpline{0}(Δ), "BSpline0"),
+    particleshapes = ((BSpline{0}(Δ), "BSpline0"),
                       (BSpline{1}(Δ), "BSpline1"),
-                      (BSpline{2}(Δ), "BSpline2"),)
+                      (BSpline{2}(Δ), "BSpline2"),
+                      (DeltaFunctionShape(), "Delta"),
+                      (GaussianShape(Δ), "Gaussian"),)
 
     fieldsolvers = (
       (FourierField(NG,L), "Fourier"),
@@ -101,25 +73,56 @@ using ElectrostaticPIC1D, Random, Statistics, Test; Random.seed!(0)
       (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
       (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
       )
-
+    q = charge(nuclide)
     xs = collect(0:1/NP:1-1/NP) .* L # equi-spaced
 
-    for (particleshape, pname) ∈ particleshapes
-      species = Species([Particle(nuclide, particleshape; x=x, v=0.0, w=weight) for x in xs])
+    perturbations = (0.0, 1e-8)
 
-      expectedchargedensity = weight * NP * charge(nuclide)
+    for (particleshape, pname) ∈ particleshapes, pert ∈ perturbations
+      pertname = iszero(pert) ? "Uniform" : "Wave"
+      ρ0 = q * physicaldensity
+      chargedensityfun(x) = ρ0 * (1.0 + pert * sin(2π*x/L + π/4))
+      weightfun(x) = chargedensityfun(x) * L / NP / q
+      E0 = q * physicaldensity * pert * L/2π
+      expectedelectricfield(x) = - E0 * cos(2π*x/L + π/4)
+
+      species = Species([Particle(nuclide, particleshape; x=x, v=0.0,
+        w=weightfun(x)) for x in xs])
+
+      expectedtotalchargedensity = weight0 * NP * q
+      totalweight = sum(ElectrostaticPIC1D.weight.(species))
+      @test totalweight * q ≈ expectedtotalchargedensity * L
       plasma = Plasma([species])
 
-      @test expectedchargedensity ≈ chargedensity(plasma)
+      @test expectedtotalchargedensity ≈ chargedensity(plasma)
 
       for (field, fname) ∈  fieldsolvers
-        @testset  "$fname-$pname" begin
+        @testset  "$pname-$pertname-$fname" begin
           ElectrostaticPIC1D.zero!(field)
-          deposit!(field, plasma)
-          qs = field.charge.(xs)
-          @test sqrt(mean((qs .- mean(qs)).^2)) ./ mean(qs) < 1e-6
-          r = chargedensity(field) / expectedchargedensity
-          @test chargedensity(field) ≈ expectedchargedensity
+          try
+            @inferred deposit!(field, plasma)
+            @test true
+          catch
+            ElectrostaticPIC1D.zero!(field)
+            deposit!(field, plasma)
+            @test false
+          end
+          qs = field.chargedensity.(xs)
+          r = chargedensity(field) / expectedtotalchargedensity
+          @test chargedensity(field) ≈ expectedtotalchargedensity
+          if pert == 0.0
+            @test sqrt(mean((qs .- mean(qs)).^2)) ./ mean(qs) < 1e-6
+          else
+            solve!(field)
+            for particle ∈ species
+              answer = electricfield(field, particle)
+              approxexpected = expectedelectricfield(centre(particle))
+              @test approxexpected ≈ answer rtol=0.1 atol=E0/1000
+              answer = chargedensity(field, particle)
+              approxexpected = chargedensityfun(centre(particle))
+              @test approxexpected ≈ answer rtol=0.1 atol=ρ0/1000
+            end
+          end
         end
       end
     end

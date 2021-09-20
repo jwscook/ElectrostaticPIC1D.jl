@@ -5,7 +5,8 @@ using ForwardDiff, LinearAlgebra
 function setup(;N=2^rand(5:7), L=10*rand(), A=10*randn(), p=rand()*2π, n=rand(1:4))
   k = 2π/L * n 
   efield(x) = A * sin(x * k + p)
-  rho(x) = k * A * cos(x * k + p)
+  dcoffset = randn() # allows for non-charge neutral plasma with periodic BCs
+  rho(x) = dcoffset + k * A * cos(x * k + p)
   return (N, L, efield, rho, A)
 end
 function findpower(cellsizes, errors)
@@ -20,13 +21,13 @@ numtests = 10
 @testset "Fourier fields" begin
   for i in 1:numtests
     N, L, efield, rho, A = setup()
-    charge = EquispacedValueGrid(N, L)
-    x = cellcentres(charge)
+    chargedensity = EquispacedValueGrid(N, L)
+    x = cellcentres(chargedensity)
     efieldexpected = efield.(x)
     rhoexpected = rho.(x)
-    charge .= rhoexpected
-    f = FourierField(charge)
-    @test f.charge ≈ rhoexpected atol=10eps()
+    chargedensity .= rhoexpected
+    f = FourierField(chargedensity)
+    @test f.chargedensity ≈ rhoexpected atol=10eps()
     solve!(f)
     @test f.electricfield ≈ efieldexpected atol=10eps() rtol=sqrt(eps())
   end
@@ -35,15 +36,15 @@ end
 @testset "FiniteDifference fields" begin
   data = Dict(1=>[], 2=>[], 3=>[], 4=>[])
   for i in 1:8
-    N, L, efield, rho, A = setup(N=2^(i+3), n=1, A=1)
-    charge = EquispacedValueGrid(N, L)
-    x = cellcentres(charge)
+    N, L, efield, rho, A = setup(N=2^(i+3), n=1)#, A=1)
+    chargedensity = EquispacedValueGrid(N, L)
+    x = cellcentres(chargedensity)
     efieldexpected = efield.(x)
     rhoexpected = rho.(x)
-    charge .= rhoexpected
+    chargedensity .= rhoexpected
     for order ∈ keys(data)
-      f = FiniteDifferenceField(charge; order=order)
-      @test f.charge ≈ rhoexpected atol=10eps()
+      f = FiniteDifferenceField(chargedensity; order=order)
+      @test f.chargedensity ≈ rhoexpected atol=10eps()
       solve!(f)
       @test f.electricfield ≈ efieldexpected atol=10eps() rtol=2.0^(- order * i)
       nrm = norm(f.electricfield .- efieldexpected) ./ norm(efieldexpected)
@@ -78,7 +79,7 @@ end
       rhoexpected = frho.(x)
       update!(chargegrid, frho)
       f = FEMFieldType(chargegrid, efieldgrid)
-      rhoresult = f.charge.(x)
+      rhoresult = f.chargedensity.(x)
       @test rhoresult ≈ rhoexpected atol=0 rtol=100eps()
       solve!(f)
       efieldresult = f.electricfield.(x)
@@ -90,11 +91,12 @@ end
       push!(nrms, nrm)
 
       fieldcharge = chargedensity(f) * L
-      expectedfieldcharge = QuadGK.quadgk(frho, 0.0, L, rtol=eps())[1]
+      expectedfieldcharge = QuadGK.quadgk(frho, 0.0, L, rtol=eps(), order=27)[1]
       @test fieldcharge ≈ expectedfieldcharge atol=1e-12 rtol=100eps()
 
-      fieldenergy = energydensity(f; rtol=sqrt(eps()))
-      expectedfieldenergy = QuadGK.quadgk(x->fefield(x)^2 / 2, 0.0, L, rtol=eps())[1] / L
+      fieldenergy = energydensity(f; rtol=1000eps())
+      expectedfieldenergy = QuadGK.quadgk(x->fefield(x)^2 / 2, 0.0, L,
+                                          rtol=eps(), order=27)[1] / L
       @test fieldenergy ≈ expectedfieldenergy atol=0 rtol=max(rtol, sqrt(eps()))
     end
     return nrms, Ns

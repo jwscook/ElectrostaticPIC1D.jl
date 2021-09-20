@@ -1,8 +1,8 @@
 using ElectrostaticPIC1D, JLD2, Plots, Random, Test; Random.seed!(0)
 
 function go()
-NG = 64 # number of grid points
-NPPCPS = 16 # number of particles per cell per species
+NG = 32 # number of grid points
+NPPCPS = 8 # number of particles per cell per species
 NS = 2 # number of species
 L = 1.0 # length of domain
 NP = NPPCPS * NG * NS # total number of particles
@@ -20,7 +20,7 @@ growthrate = normalisedgamma * plasmafrequency
 @show fastestgrowingmode, growthrate
 
 nuclide = Nuclide(q, m)
-dde = 20
+dde = 10
 
 run(`rm -rf data`)
 run(`mkdir -p data`)
@@ -48,25 +48,35 @@ for (particleshape, particletypename) ∈ particleshapes
   for (field, fieldtypename) ∈  fieldsolvers
     leftpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
     rightpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
-    budge(x) = rand(Bool) ? prevfloat(x) : nextfloat(x)
-    leftpositions .= budge.(leftpositions)
-    rightpositions .= budge.(rightpositions)
+    #budge(x) = rand(Bool) ? prevfloat(x) : nextfloat(x)
+    #budge(x) = x + randn() * 1e-8;
+
+    #leftpositions .= budge.(leftpositions)
+    #rightpositions .= budge.(rightpositions)
+
+    #leftpositions = rand(NPPCPS * NG) .* L;
+    #rightpositions = rand(NPPCPS * NG) .* L;
+    p = 0.001
+    @. leftpositions = leftpositions*(1-p) + p*(asin.(2leftpositions-1)/π+0.5)
+    @. rightpositions = rightpositions*(1-p) + p*(asin.(2rightpositions-1)/π+0.5)
     
+    leftpositions .= mod.(leftpositions, L)
+    rightpositions .= mod.(rightpositions, L)
+
     left = Species([Particle(nuclide, particleshape; x=x, v=-v0, w=weight) for x in leftpositions])
     right = Species([Particle(nuclide, particleshape; x=x, v=v0, w=weight) for x in rightpositions])
     
     plasma = Plasma([left, right])
+
     @assert length(plasma) == NS
     @assert L == v0 == 1.0 # to make things simple for this particular test
     
-    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/pi^2)
+    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/10)
 
     run(`mkdir -p data/$particletypename/$fieldtypename`)
     stub = "data/$(particletypename)/$(fieldtypename)/"
     
     sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde, endtime=10.0, filenamestub=stub)
-
-    #@test energydensity(sim.field) == 0.0 
 
     expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
     expectedmomentum = 0.0
@@ -74,15 +84,17 @@ for (particleshape, particletypename) ∈ particleshapes
     singlepseudoparticlemomentum = v0 * mass(nuclide) * weight
     electricfieldnormalisation =  expectedchargedensity * L
 
-    run!(sim)
-
     x = cellcentres(field)
-    fileindices = 0:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
-    fieldenergies = []
-    particleenergies = []
-    particlemomenta = []
-    times = []
-    #try
+
+    try
+      run!(sim)
+
+      fileindices = 0:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
+      fieldenergies = []
+      particleenergies = []
+      particlemomenta = []
+      times = []
+
       anim = @animate for i in fileindices
         sim_i = ElectrostaticPIC1D.load(stub, i)
         particlecharge = chargedensity(sim_i.plasma)
@@ -90,6 +102,10 @@ for (particleshape, particletypename) ∈ particleshapes
         particleenergy = energydensity(sim_i.plasma)
         fieldenergy = energydensity(sim_i.field)
         particlemomentum = momentumdensity(sim_i.plasma)
+        #@show minimum(sim_i.field.charge)
+        #@show maximum(sim_i.field.charge)
+        #@show minimum(sim_i.field.electricfield)
+        #@show maximum(sim_i.field.electricfield)
         push!(times, sim_i.time[])
         #@test particlecharge ≈ expectedchargedensity
         #@test fieldcharge ≈ expectedchargedensity
@@ -107,6 +123,7 @@ for (particleshape, particletypename) ∈ particleshapes
         #plot!((1:i) / maximum(fileindices), particlemomenta / singlepseudoparticlemomentum, label="momentum")
         #xlabel!("Position")
         #ylabel!("Velocity")
+        annotate!(0.05, -2.95, text("$(trunc(sim_i.time[], digits=3))"))
         xlims!(0, L)
         ylims!(-3, 3)
       end
@@ -128,8 +145,9 @@ for (particleshape, particletypename) ∈ particleshapes
       xlims!(0, maximum(times))
       ylims!(-35, 1.0)
       savefig(stub * "plot.pdf")
-    #catch
-    #end
+    catch e
+      @show particletypename, fieldtypename
+    end
   end
 end
 
