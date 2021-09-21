@@ -130,13 +130,8 @@ for (particleshape, particletypename) ∈ particleshapes
         xlims!(0, L)
         ylims!(-3, 3)
       end
-      lock(padlock)
-      try
-        gif(anim, stub * "animation.gif")
-        @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
-      finally
-        unlock(padlock)
-      end
+      gif(anim, stub * "animation.gif")
+      @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
 
       y = fieldenergies / expectedenergy
       plot(times, log10.(y), label="field energy")
