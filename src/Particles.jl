@@ -10,12 +10,6 @@ charge(n::Nuclide) = n.charge
 mass(n::Nuclide) = n.mass
 charge_mass_ratio(n::Nuclide) = n.charge_over_mass
 
-function Base.copy!(a::Nuclide, b::Nuclide)
-  a.charge = b.charge
-  a.mass = b.mass
-  a.charge_over_mass = b.charge_over_mass
-  return a
-end
 abstract type AbstractParticle end
 
 mutable struct Particle{S<:AbstractShape} <: AbstractParticle
@@ -39,13 +33,6 @@ end
 velocity(p::Particle) = p.velocity
 basis(p::Particle) = p.basis
 Base.position(p::Particle) = centre(p)
-
-function Base.copy!(a::Particle, b::Particle)
-  copy!(a.nuclide, b.nuclide)
-  copy!(a.basis, b.basis)
-  a.velocity = b.velocity
-  return a
-end
 
 for op ∈ (:weight, :lower, :upper, :width, :centre)
   @eval $op(p::Particle) = $op(basis(p))
@@ -80,19 +67,4 @@ Base.push!(p::Particle, E, dt, bc) = (pushposition!(p, dt, bc); pushvelocity!(p,
 function pushvelocity!(p::Particle, f::AbstractField, dt)
   return pushvelocity!(p, electricfield(f, p), dt)
 end
-
-BasisFunction(p::Particle) = p.basis
-
-function Base.getindex(p::Particle, i)
-  i == 1 && return lower(p)
-  i == 2 && return upper(p)
-  throw(BoundsError("getindex(::Particle, 1) returns the lower extent of the
-                    particle's basis function, and getindex(::Particle, 2)
-                    returns the upper extent. 
-                    Index requested is $i."))
-end
-
-overlap(b::BasisFunction, p::Particle) = overlap(b, basis(p))
-
-integral(p::Particle) = integral(basis(p))
 
