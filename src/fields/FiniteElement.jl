@@ -3,9 +3,12 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
   L::Float64
   bases::Vector{BasisFunction{S, T}}
-  function FEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}}
-      ) where {BC<:AbstractBC, S<:AbstractShape, T}
-    femgrid = new{BC, S, T}(N, L, bases)
+  partitionunityweights::Vector{T}
+  function FEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}},
+      puw=zeros(T, N)) where {BC<:AbstractBC, S<:AbstractShape, T}
+    dummy = new{BC, S, T}(N, L, bases, puw)
+    puw = solve(dummy, x->1)
+    femgrid = new{BC, S, T}(N, L, bases, puw)
     zero!(femgrid)
     return femgrid 
   end
@@ -47,7 +50,7 @@ end
 zero!(f::FEMGrid) = map(zero!, f)
 lower(l::FEMGrid) = 0.0
 upper(l::FEMGrid) = l.L
-domainsize(l::FEMGrid) = lower(l) - lower(l)
+domainsize(l::FEMGrid) = upper(l) - lower(l)
 numberofunknowns(l::FEMGrid) = length(l.bases)
 
 #function solve(l::FEMGrid{BC}, f::F) where {BC, F}
@@ -84,9 +87,10 @@ end
 function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(l.L)
   qw = charge(particle) * weight(particle)
-  for (index, item) ∈ enumerate(l)#
-    amount = integral(item, basis(particle), bc) / length(l)
-    item += amount * qw
+  d = domainsize(l)
+  for (index, item) ∈ enumerate(l)
+    item += integral(item, basis(particle), bc) * qw * 
+      l.partitionunityweights[index]
   end
   return l
 end
@@ -94,7 +98,7 @@ end
 function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(l.L)
   amount = 0.0
-  for (index, item) ∈ enumerate(l)#
+  for (index, item) ∈ enumerate(l)
     amount += integral(item, basis(particle), bc) * weight(item)
   end
   return amount
@@ -189,12 +193,12 @@ Other solution methods are eigen decomposition (n^3) and regularisation.
   @assert !any(isnan.(x))
   return x
 end
-using JLD2
+
 @memoize function gausslawsolve(f::AbstractFEMField{BC}) where {BC}
   A = massmatrix(f)
   b = forcevector(f)
   p = AMGPreconditioner{SmoothedAggregation}(A)
-  return IterativeSolvers.cg(A, b, Pl=p)
+  return IterativeSolvers.gmres(A, b, Pl=p)
 end
 
 postsolve!(x, ::Type{AbstractBC}) = x
@@ -248,13 +252,16 @@ function galerkinmassmatrixintegral(u::BasisFunction,
   return  _galerkinmassmatrixintegral(u, v, cache)
 end
 function _galerkinmassmatrixintegral(u, v, cache)
-  integrand(x) = u(x) * ForwardDiff.derivative(v, x)
+  function integrand(x)
+    return u(x) * ForwardDiff.derivative(y->ForwardDiff.derivative(v, y), x)
+  end
   return get!(()->QuadGK.quadgk(integrand,
     lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
 end
 
 function galerkinstiffnessmatrixintegral(u, v, cache)
-  return get!(()->QuadGK.quadgk(x->u(x) * v(x),
+  integrand(x) = u(x) * ForwardDiff.derivative(v, x)
+  return get!(()->QuadGK.quadgk(integrand,
     lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
 end
 
@@ -265,7 +272,7 @@ stiffnessmatrixintegral(::GalerkinFEMField) = galerkinstiffnessmatrixintegral
 massmatrixmatrixtype(::LSFEMField) = Symmetric
 massmatrixmatrixtype(_) = SparseMatrixCSC
 @memoize function massmatrix(f::AbstractFEMField)
-  return matrix(f.electricfield, f.electricfield, massmatrixintegral(f),
+  return matrix(f.chargedensity, f.electricfield, massmatrixintegral(f),
                 massmatrixmatrixtype(f))
 end
 @memoize function normalisedstiffnessmatrix(f::AbstractFEMField)

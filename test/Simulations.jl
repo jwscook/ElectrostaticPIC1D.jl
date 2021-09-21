@@ -1,4 +1,5 @@
-using ElectrostaticPIC1D, JLD2, Plots, Random, Test; Random.seed!(0)
+using ElectrostaticPIC1D, JLD2, Plots, Random, Test
+Random.seed!(0)
 
 function go()
 NG = 32 # number of grid points
@@ -12,7 +13,7 @@ nvortexpergrid = 1
 plasmafrequency = 2/√3 * v0 * nvortexpergrid * 2π/L
 # division by √2 because this is plasma frequency for a single species
 density = plasmafrequency^2 / q^2 * m
-weight = density * L / (NPPCPS * NG) * 1e2
+weight = density * L / (NPPCPS * NG)
 normalisedgrowthrate(x) = imag(sqrt(Complex(x^2+1-sqrt(4*x^2+1))))
 wavenumbers = 2*pi/L * (1:NG/2)
 normalisedgamma, fastestgrowingmode = findmax(normalisedgrowthrate.(v0 .* wavenumbers / plasmafrequency))
@@ -21,6 +22,7 @@ growthrate = normalisedgamma * plasmafrequency
 
 nuclide = Nuclide(q, m)
 dde = 10
+endtime = 0.1 # short for coverage testing
 
 run(`rm -rf data`)
 run(`mkdir -p data`)
@@ -37,8 +39,8 @@ fieldsolvers = ((FourierField(NG,L), "Fourier"),
                 (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
                 (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
                 (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-                (GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
-                (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+                #(GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
+                #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                 (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                 (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
                 (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),)
@@ -56,9 +58,9 @@ for (particleshape, particletypename) ∈ particleshapes
 
     #leftpositions = rand(NPPCPS * NG) .* L;
     #rightpositions = rand(NPPCPS * NG) .* L;
-    p = 0.001
-    @. leftpositions = leftpositions*(1-p) + p*(asin.(2leftpositions-1)/π+0.5)
-    @. rightpositions = rightpositions*(1-p) + p*(asin.(2rightpositions-1)/π+0.5)
+    #p = 0.001
+    #@. leftpositions = leftpositions*(1-p) + p*(asin.(2leftpositions-1)/π+0.5)
+    #@. rightpositions = rightpositions*(1-p) + p*(asin.(2rightpositions-1)/π+0.5)
     
     leftpositions .= mod.(leftpositions, L)
     rightpositions .= mod.(rightpositions, L)
@@ -71,12 +73,13 @@ for (particleshape, particletypename) ∈ particleshapes
     @assert length(plasma) == NS
     @assert L == v0 == 1.0 # to make things simple for this particular test
     
-    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/10)
+    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/9.99)
 
     run(`mkdir -p data/$particletypename/$fieldtypename`)
     stub = "data/$(particletypename)/$(fieldtypename)/"
     
-    sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde, endtime=10.0, filenamestub=stub)
+    sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde,
+                   endtime=endtime, filenamestub=stub)
 
     expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
     expectedmomentum = 0.0
@@ -97,11 +100,11 @@ for (particleshape, particletypename) ∈ particleshapes
 
       anim = @animate for i in fileindices
         sim_i = ElectrostaticPIC1D.load(stub, i)
-        particlecharge = chargedensity(sim_i.plasma)
-        fieldcharge = chargedensity(sim_i.field)
-        particleenergy = energydensity(sim_i.plasma)
-        fieldenergy = energydensity(sim_i.field)
-        particlemomentum = momentumdensity(sim_i.plasma)
+        particlecharge = charge(sim_i.plasma)
+        fieldcharge = chargedensity(sim_i.field) * L
+        particleenergy = energy(sim_i.plasma)
+        fieldenergy = energydensity(sim_i.field) * L
+        particlemomentum = momentum(sim_i.plasma)
         #@show minimum(sim_i.field.charge)
         #@show maximum(sim_i.field.charge)
         #@show minimum(sim_i.field.electricfield)
@@ -127,8 +130,13 @@ for (particleshape, particletypename) ∈ particleshapes
         xlims!(0, L)
         ylims!(-3, 3)
       end
-      gif(anim, stub * "animation.gif")
-      @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
+      lock(padlock)
+      try
+        gif(anim, stub * "animation.gif")
+        @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
+      finally
+        unlock(padlock)
+      end
 
       y = fieldenergies / expectedenergy
       plot(times, log10.(y), label="field energy")
