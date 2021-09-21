@@ -22,11 +22,6 @@ function FEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
   return FEMGrid{BC}(N, L, bases)
 end
 
-function FEMGrid(N::Int, L::Float64, ::Type{S}, ::Type{BC}=PeriodicGridBC
-                  ) where {BC<:AbstractBC, S<:AbstractShape}
-  return FEMGrid(N, L, S(L/N), BC)
-end
-
 function (l::FEMGrid{BC})(x) where {BC}
   return sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
 end
@@ -42,15 +37,10 @@ function Base.setindex!(l::FEMGrid, v, i::Integer)
   return l
 end
 
-function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:FEMGrid}
-  return isapprox(a.bases, b.bases, atol=atol, rtol=rtol)
-end
-
-
-zero!(f::FEMGrid) = map(zero!, f)
 lower(l::FEMGrid) = 0.0
 upper(l::FEMGrid) = l.L
-domainsize(l::FEMGrid) = upper(l) - lower(l)
+zero!(f::FEMGrid) = map(zero!, f)
+domainsize(l::FEMGrid) = l.L
 numberofunknowns(l::FEMGrid) = length(l.bases)
 
 #function solve(l::FEMGrid{BC}, f::F) where {BC, F}
@@ -126,11 +116,7 @@ struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractFEMField{BC}
 end
 LSFEMField(a::FEMGrid) = LSFEMField(a, deepcopy(a))
 LSFEMField(N::Int, L::Real, shape::S) where {S<:AbstractShape} = LSFEMField(FEMGrid(N, L, shape))
-Base.size(l::AbstractFEMField) = (size(l.chargedensity),)
-Base.length(l::AbstractFEMField) = length(l.chargedensity)
 
-lower(l::AbstractFEMField) = 0.0
-upper(l::AbstractFEMField) = l.chargedensity.L
 numberofunknowns(l::AbstractFEMField) = numberofunknowns(l.chargedensity)
 
 zero!(f::AbstractFEMField) = map(zero!, (f.chargedensity, f.electricfield))
@@ -241,12 +227,6 @@ function lsfemstiffnessmatrixintegral(u, v, cache)
     lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
 end
 
-
-function galerkinmassmatrixintegral(u::BasisFunction{GaussianShape},
-                                    v::BasisFunction{GaussianShape}, cache)
-  # TODO ∫ via pen & paper
-  return  _galerkinmassmatrixintegral(u, v, cache)
-end
 function galerkinmassmatrixintegral(u::BasisFunction,
                                     v::BasisFunction, cache)
   return  _galerkinmassmatrixintegral(u, v, cache)

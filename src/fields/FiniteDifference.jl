@@ -29,7 +29,7 @@ end
 
 
 
-struct PeriodicFiniteIntegratorOperator{A,T} <: Function #AbstractMatrix{T}
+struct PeriodicFiniteIntegratorOperator{A,T} <: Function
   N::Int
   Δ::T
   function PeriodicFiniteIntegratorOperator(N::Int, L::T, order::Int=2) where {T}
@@ -37,8 +37,6 @@ struct PeriodicFiniteIntegratorOperator{A,T} <: Function #AbstractMatrix{T}
     return new{order,T}(N, Δ)
   end
 end
-Base.eltype(p::PeriodicFiniteIntegratorOperator{A,T}) where {A,T} = T 
-Base.size(p::PeriodicFiniteIntegratorOperator) = (p.N, p.N)
 @memoize polymatrix(N) = lu(hcat([(0:N-1).^i for i in 0:N-1]...))
 function integratepoly(y, a, b) # TODO calculate coefficients and not do this
   N = length(y)
@@ -101,8 +99,6 @@ end
 function FiniteDifferenceField(N::Int, L::Real, ::Type{BC}=PeriodicGridBC; order::Int=2) where {BC}
   return FiniteDifferenceField(EquispacedValueGrid(N, L, BC), order=order)
 end
-
-order(f::FiniteDifferenceField{BC,T,A}) where {BC,T,A} = A
 
 presolve(g::EquispacedValueGrid{PeriodicGridBC}) = g .- mean(g)
 presolve(g::EquispacedValueGrid{<:AbstractBC}) = g

@@ -42,8 +42,6 @@ function load(filepathstub::String, diagnosticdumpcount::Int)
   return sim
 end
 
-(sim::Simulation)() = run!(sim)
-
 function run!(sim::Simulation)
   save(sim) # save initial conditions as file 0
   while time(sim) <= sim.endtime

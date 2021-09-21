@@ -62,7 +62,6 @@ knots(b::BSpline{N}) where N = 0:1/(N + 1):1
 struct DeltaFunctionShape <: AbstractShape end
 DeltaFunctionShape(_) = DeltaFunctionShape() # so has same ctor as others
 width(s::DeltaFunctionShape) = 0
-(s::DeltaFunctionShape)(x, centre) = x == centre
 
 mutable struct BasisFunction{S<:AbstractShape, T}
   shape::S
@@ -70,24 +69,6 @@ mutable struct BasisFunction{S<:AbstractShape, T}
   weight::T
 end
 BasisFunction(s::AbstractShape, centre) = BasisFunction(s, centre, 0.0)
-
-
-Base.extrema(b::BasisFunction) = (lower(b), upper(b))
-Base.extrema(a::BasisFunction, b::BasisFunction) = (lower(a, b), upper(a, b))
-function Base.copy(a::BasisFunction{S}, b::BasisFunction{S}) where {S<:AbstractShape}
-  a.S = b.S
-  a.centre = b.centre
-  a.weight = b.weight
-  return a
-end
-for op ∈ (:+, :-)
-  @eval function Base.$op(a::BasisFunction{S}, b::BasisFunction{S}) where {S<:AbstractShape}
-    @assert a.shape == b.shape
-    return BasisFunction{S}(a.shape, $op(a.centre, b.centre), (a.weight + b.weight)/2)
-  end
-end
-Base.:*(a::BasisFunction, x::Number) = BasisFunction(a.shape, a.centre * x, a.weight)
-Base.:/(a::BasisFunction, x::Number) = BasisFunction(a.shape, a.centre / x, a.weight)
 
 lower(b::BasisFunction) = b.centre - width(b.shape) / 2
 upper(b::BasisFunction) = b.centre + width(b.shape) / 2
@@ -112,14 +93,7 @@ function translate!(b::BasisFunction, x::Number, bc::AbstractBC)
   return b
 end
 Base.:+(b::BasisFunction, x) = (b.weight += x; b)
-Base.:+(x, b::BasisFunction) = x + b.weight
-Base.:+(a::BasisFunction, b::BasisFunction) = a.weight + b.weight
-Base.:*(x, b::BasisFunction) = x * b.weight
-Base.:*(b::BasisFunction, x) = x * b.weight
-function Base.convert(::Type{Complex{T}}, b::BasisFunction{<:AbstractShape, T}
-                     ) where {T}
-  return Complex(b.weight)
-end
+
 zero!(b::BasisFunction) = (b.weight *= false)
 function Base.in(x::Number, b::BasisFunction)
   return (b.centre - width(b)/2 <= x < b.centre + width(b)/2)
@@ -158,7 +132,6 @@ function overlap(a::BasisFunction, b::BasisFunction)
 end
 Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
 
-BasisFunction(centre::Number, width::Number) = BasisFunction(TopHat(width), centre)
 
 function integral(b::BasisFunction{DeltaFunctionShape}, f::F, _::AbstractBC) where {F}
   return f(centre(b))

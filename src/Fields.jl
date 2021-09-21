@@ -6,7 +6,7 @@ using ThreadsX, ToeplitzMatrices
 abstract type AbstractGrid{BC,T} <: AbstractVector{T} end
 
 # AbstractArray interface, the rest are in the specific files below
-Base.size(g::AbstractGrid) = g.N
+#Base.size(g::AbstractGrid) = g.N
 
 abstract type AbstractField{BC<:AbstractBC} end
 
@@ -36,29 +36,6 @@ end
 energydensity(f::AbstractField; rtol=sqrt(eps())) = energy(f; rtol=rtol) / domainsize(f)
 chargedensity(f::AbstractField) = charge(f) / domainsize(f)
 
-
-function Base.isapprox(a::T, b::T, atol=0, rtol=sqrt(eps())) where {T<:AbstractField}
-  return isapprox(a.chargedensity, b.chargedensity, atol=atol, rtol=rtol) &&
-    isapprox(a.electricfield, b.electricfield, atol=atol, rtol=rtol)
-end
-
-zerochargedensity!(f::AbstractField) = zero!(f.chargedensity)
-zeroelectricfield!(f::AbstractField) = zero!(f.electricfield)
-
-function update!(f::AbstractField, species)
-  for particle ∈ species
-    deposit!(f.chargedensity, particle)
-  end
-  return f
-end
-
 function cellcentres(f::AbstractField)
   return ((1:numberofunknowns(f)) .- 0.5) * domainsize(f) / numberofunknowns(f)
-end
-
-function chargedensityvalues(f::AbstractField, x=cellcentres(f))
-  return map(f.chargedensity, x)
-end
-function electricfieldvalues(f::AbstractField, x=cellcentres(f))
-  return map(f.electricfield, x)
 end
