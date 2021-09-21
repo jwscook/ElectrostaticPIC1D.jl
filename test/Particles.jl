@@ -47,14 +47,13 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
 
   @testset "Lots of particles tests" begin
     NG = 128 # number of grid points / basis functions
-    NPPC = 2 # number of particle per cell
+    NPPC = 3 # number of particle per cell
     NP = NG * NPPC
-    L = 1.0 # rand()
+    L = rand()
     Δ = L / NG
     nuclide = Nuclide(rand(2)...)
 
-    physicaldensity = NP / L#make weight unity #rand()
-    weight0 = physicaldensity * L / NP
+    physicalmeandensity = rand()
 
     particleshapes = ((BSpline{0}(Δ), "BSpline0"),
                       (BSpline{1}(Δ), "BSpline1"),
@@ -67,35 +66,35 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
       (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
       (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
       (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-      (GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
       (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
       (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
       (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
       (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
       )
     q = charge(nuclide)
-    xs = collect(0:1/NP:1-1/NP) .* L # equi-spaced
+    xs = collect(1/NP/2:1/NP:1-1/NP/2) .* L # equi-spaced
 
     perturbations = (0.0, 1e-8)
 
     for (particleshape, pname) ∈ particleshapes, pert ∈ perturbations
       pertname = iszero(pert) ? "Uniform" : "Wave"
-      ρ0 = q * physicaldensity
+      ρ0 = q * physicalmeandensity
       chargedensityfun(x) = ρ0 * (1.0 + pert * sin(2π*x/L + π/4))
-      weightfun(x) = chargedensityfun(x) * L / NP / q
-      E0 = q * physicaldensity * pert * L/2π
+      weightfun(x) = chargedensityfun(x) / q * L / NP
+      E0 = q * physicalmeandensity * pert * L/2π
       expectedelectricfield(x) = - E0 * cos(2π*x/L + π/4)
 
       species = Species([Particle(nuclide, particleshape; x=x, v=0.0,
         w=weightfun(x)) for x in xs])
 
-      expectedtotalchargedensity = weight0 * NP * q
+      expectedoverallchargedensity = ρ0
       totalweight = sum(ElectrostaticPIC1D.weight.(species))
-      @test totalweight * q ≈ expectedtotalchargedensity * L
+      @test totalweight * q ≈ expectedoverallchargedensity * L
       plasma = Plasma([species])
 
-      @test expectedtotalchargedensity ≈ chargedensity(plasma)
+      @test expectedoverallchargedensity * L ≈ charge(plasma)
 
+      #@show pname
       for (field, fname) ∈  fieldsolvers
         @testset  "$pname-$pertname-$fname" begin
           ElectrostaticPIC1D.zero!(field)
@@ -107,20 +106,23 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
             deposit!(field, plasma)
             @test false
           end
-          qs = field.chargedensity.(xs)
-          r = chargedensity(field) / expectedtotalchargedensity
-          @test chargedensity(field) ≈ expectedtotalchargedensity
+          @test chargedensity(field) ≈ expectedoverallchargedensity
           if pert == 0.0
+            qs = field.chargedensity.(xs)
             @test sqrt(mean((qs .- mean(qs)).^2)) ./ mean(qs) < 1e-6
           else
             solve!(field)
+            # because we're testing against a wave field, but not accounting
+            # for particle shape here in the test, then we can only expect
+            # approximate equality
             for particle ∈ species
               answer = electricfield(field, particle)
               approxexpected = expectedelectricfield(centre(particle))
-              @test approxexpected ≈ answer rtol=0.1 atol=E0/1000
+              @test answer ≈ approxexpected rtol=0.1 atol=E0/1000
+              #@show fname, answer / approxexpected
               answer = chargedensity(field, particle)
               approxexpected = chargedensityfun(centre(particle))
-              @test approxexpected ≈ answer rtol=0.1 atol=ρ0/1000
+              @test answer ≈ approxexpected rtol=0.1 atol=ρ0/1000
             end
           end
         end

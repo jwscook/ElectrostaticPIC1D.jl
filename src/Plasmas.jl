@@ -23,13 +23,13 @@ velocities(p::Plasma) = [velocities(s) for s ∈ p]
 weights(s::Species) = [weight(p) for p ∈ s]
 weights(p::Plasma) = [weights(s) for s ∈ p]
 
-energydensity(s::Species) = sum(weight(p) * velocity(p)^2 * mass(p)/2 for p ∈ s)
-momentumdensity(s::Species) = sum(weight(p) * velocity(p) * mass(p) for p ∈ s)
-chargedensity(s::Species) = sum(weight(p) * charge(p) for p ∈ s)
+energy(s::Species) = sum(weight(p) * velocity(p)^2 * mass(p)/2 for p ∈ s)
+momentum(s::Species) = sum(weight(p) * velocity(p) * mass(p) for p ∈ s)
+charge(s::Species) = sum(weight(p) * charge(p) for p ∈ s)
 
-energydensity(p::Plasma) = sum(energydensity.(p))
-momentumdensity(p::Plasma) = sum(momentumdensity.(p))
-chargedensity(p::Plasma) = sum(chargedensity.(p))
+energy(p::Plasma) = sum(energy.(p))
+momentum(p::Plasma) = sum(momentum.(p))
+charge(p::Plasma) = sum(charge.(p))
 
 function maxspeed(p::Plasma)
   output = 0.0
