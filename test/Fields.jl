@@ -137,18 +137,23 @@ end
     end
   end
 
-  @testset "BSpline{1}" begin
+  @testset "Galerkin BSpline{1} BSpline{2}" begin
+    nrms, Ns = _dotest(GalerkinFEMField, x->BSpline{1}(x), x->BSpline{2}(x); verbose=false)
+    p = findpower(1 ./ Ns, nrms)
+    @test p ≈ 2 rtol = 0.1
+  end
+  @testset "LSFEM BSpline{1}" begin
     nrms, Ns = _dotest(LSFEMField, x->BSpline{1}(x); verbose=false)
     p = findpower(1 ./ Ns, nrms)
     @test p ≈ 2 rtol = 0.1
   end
-  @testset "BSpline{2}" begin
+  @testset "LSFEM BSpline{2}" begin
     nrms, Ns = _dotest(LSFEMField, x->BSpline{2}(x); verbose=false)
     inds = Ns .< 1000
     p = findpower(1 ./ Ns[inds], nrms[inds])
     @test p > 2.9
   end
-  @testset "Gaussian" begin
+  @testset "LSFEM Gaussian" begin
     nrms, Ns = _dotest(LSFEMField, x->GaussianShape(x * √2), verbose=false)
     p = findpower(1 ./ Ns, nrms)
     @test all(nrms .< 0.01)

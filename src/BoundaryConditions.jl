@@ -17,8 +17,8 @@ Base.:>(x::Number, p::PeriodicGridBC) = x > p.upper
 
 function (p::PeriodicGridBC)(x::Number)
   x ∈ p && return x
-  x < p && return x + length(p)
-  x > p && return x - length(p)
+  x < p && return p(x + length(p))
+  x > p && return p(x - length(p))
   @show x, p
   throw(error("Should never reach here, $p, $x"))
 end

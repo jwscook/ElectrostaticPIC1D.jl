@@ -36,11 +36,10 @@ end
   rtol::Float64
   maxiters::Int64
   fieldcopy
-  plasmacopy
 end
 
 function SemiImplicit2ndOrderTimeIntegrator(p::Plasma, f::AbstractField; maxiters=10, atol=0, rtol=sqrt(eps()))
-  return SemiImplicit2ndOrderTimeIntegrator(cellsize(f) / maxspeed(p), atol, rtol, maxiters, deepcopy(p), deepcopy(f))
+  return SemiImplicit2ndOrderTimeIntegrator(cellsize(f) / maxspeed(p), atol, rtol, maxiters, deepcopy(p))
 end
 
 timestep(ti::SemiImplicit2ndOrderTimeIntegrator) = ti.dt
@@ -49,16 +48,14 @@ timestep(ti::SemiImplicit2ndOrderTimeIntegrator) = ti.dt
 function (ti::SemiImplicit2ndOrderTimeIntegrator)(plasma, field, dt=nothing)
   isnothing(dt) && (dt = timestep(ti))
   bc = BC(0.0, domainsize(field))
-  zero!(field)
-  fieldcopy = deepcopy(field) # TODO stop this from allocating, or figure how to not require a copy
-  plasmacopy = deepcopy(plasma) # TODO stop this from allocating, or figure how to not require a copy
+  copy!(ti.fieldcopy, field)
   firstiteration = true
-  zero!(field) # field is to be known at the half timestep
-  while firstiteration || !isapprox(field, fieldcopy, atol=ti.atol, rtol=ti.rtol) || iters < ti.maxiters
+  while firstiteration || iters < ti.maxiters
     firstiteration = false
+    zero!(field.chargedensity)
     for (i,s) ∈ enumerate(plasma.species)
       for (j, particle) ∈ enumerate(s.particles)
-        p₀ = plasmacopy[i][j]
+        p₀ = deepcopy(particle)
         copy!(particle, p₀)
         pushposition!(particle, dt/2, bc) # push half with starting velocity
         pushvelocity!(particle, field, dt) # accelerate with middle velocity
@@ -66,8 +63,14 @@ function (ti::SemiImplicit2ndOrderTimeIntegrator)(plasma, field, dt=nothing)
         deposit!(field, (p₀ + particle) / 2)
       end
     end
-    fieldcopy = deepcopy(field) # copy across before solve
     solve!(field) # solve for the mid point electric field
+    if isapprox(field, fieldcopy, atol=ti.atol, rtol=ti.rtol) 
+      pushposition!(plasma, dt / 2, bc)
+      pushvelocity!(plasma, field, dt)
+      pushposition!(plasma, dt / 2, bc)
+      break
+    end
+    copy!(ti.fieldcopy, field)
   end
   return nothing
 end

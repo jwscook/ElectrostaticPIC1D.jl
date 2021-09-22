@@ -1,4 +1,4 @@
-
+using Statistics
 struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   N::Int
   L::Float64
@@ -7,8 +7,11 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   buckets::Dict{BasisFunction{TopHatShape,Float64},Set{Int}}
   function FEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}},
       puw=zeros(T, N)) where {BC<:AbstractBC, S<:AbstractShape, T}
-    dummy = new{BC, S, T}(N, L, bases, puw)
-    puw = solve(dummy, x->1)
+    bc = BC(L)
+    puw = 1 ./ [sum(v(centre(u), bc) for u ∈ bases) for v ∈ bases]
+    @assert !any(iszero, puw)
+
+    zero!.(bases)
 
     # Split the grid up into buckets;
     # Any basisfunction that does not intersect with a key
@@ -32,9 +35,7 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
       buckets[bin] = contents
     end
 
-    femgrid = new{BC, S, T}(N, L, bases, puw, buckets)
-    zero!(femgrid)
-    return femgrid 
+    return new{BC, S, T}(N, L, bases, puw, buckets)
   end
 end
 
@@ -47,7 +48,8 @@ function FEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
 end
 
 function (l::FEMGrid{BC})(x) where {BC}
-#  return sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
+  # This is equivalent to return sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
+  # but is faster
   bc = BC(l.L)
   processedindices = Set{Int}()
   amount = 0.0
@@ -80,33 +82,41 @@ domainsize(l::FEMGrid) = l.L
 numberofunknowns(l::FEMGrid) = length(l.bases)
 
 #function solve(l::FEMGrid{BC}, f::F) where {BC, F}
-#  p = BC(lower(l), upper(l))
+#  bc = BC(lower(l), upper(l))
 #  zero!(l)
 #  A = zeros(length(l), length(l))
 #  for (j, v) ∈ enumerate(l.bases), (i, u) ∈ enumerate(l.bases)
-#    A[i, j] = integral(u, v, p)
+#    A[i, j] = integral(u, v, bc)
 #  end
 #  b = zeros(length(l))
 #  for (j, v) ∈ enumerate(l.bases)
-#    b[j] = integral(v, f, p)
+#    b[j] = integral(v, f, bc)
 #  end
 #  x = A \ b
 #  return x
 #end
- 
-function solve(l::FEMGrid{BC}, f::F) where {BC, F}
-  p = BC(0.0, l.L)
-  A = zeros(length(l), length(l))
-  ThreadsX.foreach(enumerate(l)) do (j, v)
-    for (i, u) in enumerate(l)
-      A[i, j] = v(centre(u),p)
+
+# Pull a special trick to solve circulant matrix that pops out of periodic BCs
+function solve(A::AbstractMatrix, b::AbstractVector)
+  x = if Circulant(A) ≈ A
+    c = fft(A[:, 1])
+    c[1] = 1 # 1st mode (eigenvalue) is zero; will * by false later
+    o = fft(b) ./ c
+    o[1] *= false # PeriodicGridBC means we want zero DC offset
+    for i ∈ eachindex(o) # incase we are dividing by any other zeros
+      isnan(o[i]) && (o[i] *= false)
     end
+    real.(ifft(o))
+  elseif rank(Matrix(A)) == size(A, 1) # is non-singular
+    demean!(A \ b)
+  else
+    u, v = eigen(Matrix(A))
+    idu = 1 ./ u
+    idu[end] *= false # just like ignoring 0th Fourier mode?
+    A⁻¹ = real.(v * diagm(idu) * inv(v))
+    demean!(A⁻¹ * b)
   end
-  b = zeros(length(l))
-  ThreadsX.foreach(enumerate(l)) do (j, v)
-    b[j] = f(centre(v))
-  end
-  x = A \ b
+  @assert !any(isnan.(x))
   return x
 end
 
@@ -217,12 +227,29 @@ end
 
 
 function update!(l::FEMGrid{BC}, f::F) where {BC, F}
-  x = solve(l, f)
+  bc = BC(0.0, l.L)
+
+  A = zeros(length(l), length(l))
+  ThreadsX.foreach(enumerate(l)) do (j, v)
+    for (i, u) in enumerate(l)
+      A[i, j] = v(centre(u), bc)
+    end
+  end
+
+  b = zeros(length(l))
+  ThreadsX.foreach(enumerate(l)) do (j, v)
+    b[j] = f(centre(v))
+  end
+
+  x = A \ b
+
   @avx for i ∈ eachindex(x)
     setindex!(l, x[i], i)
   end
+
   return l
 end
+
 abstract type AbstractFEMField{BC} <: AbstractField{BC} end
 
 """
@@ -271,11 +298,26 @@ function GalerkinFEMField(N::Int, L::Real, chargeshape::S1, efieldshape::S2
   return GalerkinFEMField(FEMGrid(N, L, chargeshape), FEMGrid(N,L, efieldshape))
 end
 
-# Pull a special trick to solve circulant matrix that pops out of periodic BCs
-"""
-    fieldsolve(f::AbstractFEMField{PeriodicGridBC})
+function solve(field::AbstractFEMField{PeriodicGridBC})
+  A = massmatrix(field)
+  b = forcevector(field)
+  return solve(A, b)
+end
 
-Solve Gauss's law to obtain the electric field from the chargedensity
+function solve(f::AbstractFEMField{BC}) where {BC}
+  A = massmatrix(f)
+  b = forcevector(f)
+  p = AMGPreconditioner{SmoothedAggregation}(A)
+  return IterativeSolvers.gmres(A, b, Pl=p)
+end
+
+postsolve!(x, ::Type{AbstractBC}) = x
+postsolve!(x, ::Type{PeriodicGridBC}) = demean!(x)
+
+"""
+    solve!(f::AbstractFEMField{PeriodicGridBC})
+
+Solve for the electric field from the chargedensity.
 The periodic boundary condition creates a circulant Symmetric matrix,
 which can be solved via FFTs (n log n).
 
@@ -290,43 +332,9 @@ Other solution methods are eigen decomposition (n^3) and regularisation.
 ```julia
 ```
 """
-@memoize function fieldsolve(field::AbstractFEMField{PeriodicGridBC})
-  A = massmatrix(field)
-  b = forcevector(field)
-  x = if Circulant(A) ≈ A
-    c = fft(A[:, 1])
-    c[1] = 1 # 1st mode (eigenvalue) is zero; will * by false later
-    o = fft(b) ./ c
-    o[1] *= false # PeriodicGridBC means we want zero DC offset
-    for i ∈ eachindex(o) # incase we are dividing by any other zeros
-      isnan(o[i]) && (o[i] *= false)
-    end
-    real.(ifft(o))
-  elseif rank(Matrix(A)) == size(A, 1) # is non-singular
-    demean!(A \ b)
-  else
-    u, v = eigen(Matrix(A))
-    idu = 1 ./ u
-    idu[end] *= false # just like ignoring 0th Fourier mode?
-    A⁻¹ = real.(v * diagm(idu) * inv(v))
-    demean!(A⁻¹ * b)
-  end
-  @assert !any(isnan.(x))
-  return x
-end
-
-@memoize function fieldsolve(f::AbstractFEMField{BC}) where {BC}
-  A = massmatrix(f)
-  b = forcevector(f)
-  p = AMGPreconditioner{SmoothedAggregation}(A)
-  return IterativeSolvers.gmres(A, b, Pl=p)
-end
-
-postsolve!(x, ::Type{AbstractBC}) = x
-postsolve!(x, ::Type{PeriodicGridBC}) = demean!(x)
 function solve!(f::AbstractFEMField{BC}) where {BC}
   x = try
-    fieldsolve(f)
+    solve(f)
   catch err
     A = massmatrix(f)
     b = forcevector(f)
