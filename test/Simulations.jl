@@ -33,7 +33,8 @@ particleshapes = ((DeltaFunctionShape(), "Delta"),
                   (GaussianShape(Δ), "Gaussian"),
                   (BSpline{0}(Δ), "BSpline0"),
                   (BSpline{1}(Δ), "BSpline1"),
-                  (BSpline{2}(Δ), "BSpline2"),)
+                  (BSpline{2}(Δ), "BSpline2"),
+                  )
                   
 fieldsolvers = ((FourierField(NG,L), "Fourier"),
                 (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
@@ -42,118 +43,122 @@ fieldsolvers = ((FourierField(NG,L), "Fourier"),
                 (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                 (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                 (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
-                (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),)
+                (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
+                )
+
+particleics = Dict()
+
+leftpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
+rightpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
+
+#particleics[:Quiet] = deepcopy((leftpositions, rightpositions))
+
+budge(x) = x + L * 2(rand() - 0.5) * 1e-4;
+
+particleics[:Muffled] = deepcopy((budge.(leftpositions), budge.(rightpositions)))
+
+particleics[:Noisey] = (rand(NPPCPS * NG) .* L, rand(NPPCPS * NG) .* L)
+
+#particleics[:Seeded] = (leftpositions*(1-p) + p*(asin.(2leftpositions-1)/π+0.5),
+#                        rightpositions*(1-p) - p*(asin.(2rightpositions-1)/π+0.5))
 
 for (field, fieldtypename) ∈  fieldsolvers
   run(`mkdir -p data/$fieldtypename`)
   for (particleshape, particletypename) ∈ particleshapes
-    leftpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
-    rightpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
-    #budge(x) = rand(Bool) ? prevfloat(x) : nextfloat(x)
-    budge(x) = x + L * randn() * 1e-6;
+  run(`mkdir -p data/$fieldtypename/$particletypename`)
+    for (icname, (xl, xr)) ∈ particleics
+      run(`mkdir -p data/$fieldtypename/$particletypename/$icname`)
+      stub = "data/$(fieldtypename)/$(particletypename)/$(icname)/"
+       
+      left = Species([Particle(nuclide, particleshape; x=mod(x,L), v=-v0, w=weight) for x in mod.(xl, L)])
+      right = Species([Particle(nuclide, particleshape; x=mod(x,L), v=v0, w=weight) for x in mod.(xr, L)])
+      
+      plasma = Plasma([left, right])
 
-    leftpositions .= budge.(leftpositions)
-    rightpositions .= budge.(rightpositions)
+      @assert length(plasma) == NS
+      @assert L == v0 == 1.0 # to make things simple for this particular test
+      
+      ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/7)
+      
+      sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde,
+                     endtime=endtime, filenamestub=stub)
 
-    #leftpositions = rand(NPPCPS * NG) .* L;
-    #rightpositions = rand(NPPCPS * NG) .* L;
-    #p = 0.001
-    #@. leftpositions = leftpositions*(1-p) + p*(asin.(2leftpositions-1)/π+0.5)
-    #@. rightpositions = rightpositions*(1-p) + p*(asin.(2rightpositions-1)/π+0.5)
-    
-    leftpositions .= mod.(leftpositions, L)
-    rightpositions .= mod.(rightpositions, L)
+      expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
+      expectedmomentum = 0.0
+      expectedchargedensity = weight * NP * charge(nuclide)
+      singlepseudoparticlemomentum = v0 * mass(nuclide) * weight
+      electricfieldnormalisation = expectedchargedensity * L / NG
 
-    left = Species([Particle(nuclide, particleshape; x=x, v=-v0, w=weight) for x in leftpositions])
-    right = Species([Particle(nuclide, particleshape; x=x, v=v0, w=weight) for x in rightpositions])
-    
-    plasma = Plasma([left, right])
+      x = cellcentres(field)
 
-    @assert length(plasma) == NS
-    @assert L == v0 == 1.0 # to make things simple for this particular test
-    
-    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/7)
+      try
+        init!(sim) # set up to start
+        @time run!(sim)
 
-    run(`mkdir -p data/$fieldtypename/$particletypename`)
-    stub = "data/$(fieldtypename)/$(particletypename)/"
-    
-    sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde,
-                   endtime=endtime, filenamestub=stub)
+        fileindices = 0:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
+        fieldenergies = []
+        particleenergies = []
+        particlemomenta = []
+        times = []
 
-    expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
-    expectedmomentum = 0.0
-    expectedchargedensity = weight * NP * charge(nuclide)
-    singlepseudoparticlemomentum = v0 * mass(nuclide) * weight
-    electricfieldnormalisation =  expectedchargedensity * L
+        anim = @animate for i in fileindices
+          sim_i = ElectrostaticPIC1D.load(stub, i)
 
-    x = cellcentres(field)
+          push!(times, sim_i.time[])
+          scatter(positions(sim_i.plasma), velocities(sim_i.plasma), label=nothing)
 
-    try
-      init!(sim) # set up to start
-      @time run!(sim)
+          #particlecharge = charge(sim_i.plasma)
+          #fieldcharge = chargedensity(sim_i.field) * L
+          particleenergy = energy(sim_i.plasma)
+          fieldenergy = energydensity(sim_i.field) * L
+          particlemomentum = momentum(sim_i.plasma)
+          #@show minimum(sim_i.field.charge)
+          #@show maximum(sim_i.field.charge)
+          #@show minimum(sim_i.field.electricfield)
+          #@show maximum(sim_i.field.electricfield)
+          #@test particlecharge ≈ expectedchargedensity
+          #@test fieldcharge ≈ expectedchargedensity
+          #@test particleenergy + fieldenergy ≈ expectedenergy rtol=0.01
+          #@test particlemomentum ≈ expectedmomentum atol=sqrt(eps()) rtol=1/NP
 
-      fileindices = 0:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
-      fieldenergies = []
-      particleenergies = []
-      particlemomenta = []
-      times = []
+          plot!(x, sim_i.field.electricfield.(x) ./ electricfieldnormalisation, label="E")
+          plot!(x, sim_i.field.chargedensity.(x) ./ expectedchargedensity, label="ρ")
+          push!(fieldenergies, fieldenergy)
+          push!(particleenergies, particleenergy)
+          push!(particlemomenta, particlemomentum)
+          #plot!((1:i) / maximum(fileindices), fieldenergies / expectedenergy, label="field energy")
+          #plot!((1:i) / maximum(fileindices), particleenergies / expectedenergy, label="particle energy")
+          #plot!((1:i) / maximum(fileindices), particlemomenta / singlepseudoparticlemomentum, label="momentum")
+          #xlabel!("Position")
+          #ylabel!("Velocity")
+          annotate!(0.05, -2.95, text("$(trunc(sim_i.time[], digits=3))", :left))
+          xlims!(0, L)
+          ylims!(-3, 3)
+          annotate!(0.02, 2.9, text("p=$particletypename", :left))
+          annotate!(0.02, 2.6, text("f=$fieldtypename", :left))
+        end
+        gif(anim, stub * "animation.gif")
+        @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
 
-      anim = @animate for i in fileindices
-        sim_i = ElectrostaticPIC1D.load(stub, i)
+        y = fieldenergies / expectedenergy
+        plot(times, log10.(y), label="field energy")
+        index = findfirst(y .> 1e-2)
+        index = isnothing(index) ? 10 : index
+        plot!(times, 2*growthrate / log(10) .* (times .- times[index]) .+ log10.(abs.(y[index])),label="predicted")
 
-        push!(times, sim_i.time[])
-        scatter(positions(sim_i.plasma), velocities(sim_i.plasma), label=nothing)
+        y = particlemomenta ./ singlepseudoparticlemomentum
+        plot!(times, log10.(abs.(y .- y[1])), label="momentum")
+        y = (fieldenergies .+ particleenergies) / expectedenergy
+        plot!(times, log10.(abs.(y .- y[1])), label="energy error")
 
-        #particlecharge = charge(sim_i.plasma)
-        #fieldcharge = chargedensity(sim_i.field) * L
-        particleenergy = energy(sim_i.plasma)
-        fieldenergy = energydensity(sim_i.field) * L
-        particlemomentum = momentum(sim_i.plasma)
-        #@show minimum(sim_i.field.charge)
-        #@show maximum(sim_i.field.charge)
-        #@show minimum(sim_i.field.electricfield)
-        #@show maximum(sim_i.field.electricfield)
-        #@test particlecharge ≈ expectedchargedensity
-        #@test fieldcharge ≈ expectedchargedensity
-        #@test particleenergy + fieldenergy ≈ expectedenergy rtol=0.01
-        #@test particlemomentum ≈ expectedmomentum atol=sqrt(eps()) rtol=1/NP
-
-        #plot!(x, sim_i.field.electricfield.(x) ./ electricfieldnormalisation, label="E")
-        #plot!(x, sim_i.field.charge.(x) ./ expectedchargedensity, label="ρ")
-        push!(fieldenergies, fieldenergy)
-        push!(particleenergies, particleenergy)
-        push!(particlemomenta, particlemomentum)
-        #plot!((1:i) / maximum(fileindices), fieldenergies / expectedenergy, label="field energy")
-        #plot!((1:i) / maximum(fileindices), particleenergies / expectedenergy, label="particle energy")
-        #plot!((1:i) / maximum(fileindices), particlemomenta / singlepseudoparticlemomentum, label="momentum")
-        #xlabel!("Position")
-        #ylabel!("Velocity")
-        annotate!(0.05, -2.95, text("$(trunc(sim_i.time[], digits=3))", :left))
-        xlims!(0, L)
-        ylims!(-3, 3)
-        annotate!(0.02, 2.9, text("p=$particletypename", :left))
-        annotate!(0.02, 2.6, text("f=$fieldtypename", :left))
+        xlabel!("Time", legend=:bottomright)
+        xlims!(0, maximum(times))
+        ylims!(-35, 1.0)
+        savefig(stub * "plot.pdf")
+      catch e
+        @show fieldtypename, particletypename
+        @show e
       end
-      @time gif(anim, stub * "animation.gif")
-      @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
-
-      y = fieldenergies / expectedenergy
-      plot(times, log10.(y), label="field energy")
-      index = findfirst(y .> 1e-2)
-      index = isnothing(index) ? 10 : index
-      plot!(times, 2*growthrate / log(10) .* (times .- times[index]) .+ log10.(abs.(y[index])),label="predicted")
-
-      y = particlemomenta ./ singlepseudoparticlemomentum
-      plot!(times, log10.(abs.(y .- y[1])), label="momentum")
-      y = (fieldenergies .+ particleenergies) / expectedenergy
-      plot!(times, log10.(abs.(y .- y[1])), label="energy error")
-
-      xlabel!("Time", legend=:bottomright)
-      xlims!(0, maximum(times))
-      ylims!(-35, 1.0)
-      savefig(stub * "plot.pdf")
-    catch e
-      @show fieldtypename, particletypename
     end
   end
 end

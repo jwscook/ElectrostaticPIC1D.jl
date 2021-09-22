@@ -21,6 +21,8 @@ deposit!(f::AbstractField, p) = deposit!(f.chargedensity, p)
 antideposit(f::AbstractField, p) = antideposit(f.electricfield, p)
 electricfield(f::AbstractField, p) = antideposit(f.electricfield, p)
 chargedensity(f::AbstractField, p) = antideposit(f.chargedensity, p)
+electricfield(f::AbstractField, x::Number) = f.electricfield(x)
+chargedensity(f::AbstractField, x::Number) = f.chargedensity(x)
 cellsize(l::AbstractField) = l.chargedensity.L / numberofunknowns(l.chargedensity)
 domainsize(l::AbstractField) = l.chargedensity.L
 numberofunknowns(f::AbstractField) = numberofunknowns(f.chargedensity)
@@ -38,4 +40,12 @@ chargedensity(f::AbstractField) = charge(f) / domainsize(f)
 
 function cellcentres(f::AbstractField)
   return ((1:numberofunknowns(f)) .- 0.5) * domainsize(f) / numberofunknowns(f)
+end
+
+import Base.copy!
+function Base.copy!(a::AbstractField, b::AbstractField)
+
+  a.chargedensity .= b.chargedensity # TODO make this and next line good
+  a.electricfield .= b.electricfield # TODO make this and prev line good
+  return a
 end

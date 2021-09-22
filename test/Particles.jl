@@ -74,7 +74,7 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
     q = charge(nuclide)
     xs = collect(1/NP/2:1/NP:1-1/NP/2) .* L # equi-spaced
 
-    perturbations = (0.0, 1e-8)
+    perturbations = (0.0, 1e-3)
 
     for (particleshape, pname) ∈ particleshapes, pert ∈ perturbations
       pertname = iszero(pert) ? "Uniform" : "Wave"
@@ -94,7 +94,6 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
 
       @test expectedoverallchargedensity * L ≈ charge(plasma)
 
-      #@show pname
       for (field, fname) ∈  fieldsolvers
         @testset  "$pname-$pertname-$fname" begin
           ElectrostaticPIC1D.zero!(field)
