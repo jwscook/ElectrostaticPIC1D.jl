@@ -51,7 +51,7 @@ particleics = Dict()
 leftpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
 rightpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
 
-#particleics[:Quiet] = deepcopy((leftpositions, rightpositions))
+particleics[:Quiet] = deepcopy((leftpositions, rightpositions))
 
 budge(x) = x + L * 2(rand() - 0.5) * 1e-4;
 
@@ -153,7 +153,7 @@ for (field, fieldtypename) ∈  fieldsolvers
 
         xlabel!("Time", legend=:bottomright)
         xlims!(0, maximum(times))
-        ylims!(-35, 1.0)
+        ylims!(-17, 1.0)
         savefig(stub * "plot.pdf")
       catch e
         @show fieldtypename, particletypename
