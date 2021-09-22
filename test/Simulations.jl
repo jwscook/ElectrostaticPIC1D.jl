@@ -2,8 +2,8 @@ using ElectrostaticPIC1D, JLD2, Plots, Random, Test
 Random.seed!(0)
 
 function go()
-NG = 32 # number of grid points
-NPPCPS = 8 # number of particles per cell per species
+NG = 64 # number of grid points
+NPPCPS = 16 # number of particles per cell per species
 NS = 2 # number of species
 L = 1.0 # length of domain
 NP = NPPCPS * NG * NS # total number of particles
@@ -22,7 +22,7 @@ growthrate = normalisedgamma * plasmafrequency
 
 nuclide = Nuclide(q, m)
 dde = 10
-endtime = 0.1 # short for coverage testing
+endtime = 20.0
 
 run(`rm -rf data`)
 run(`mkdir -p data`)
@@ -39,22 +39,21 @@ fieldsolvers = ((FourierField(NG,L), "Fourier"),
                 (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
                 (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
                 (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-                #(GalerkinFEMField(NG,L,BSpline{0}(Δ), BSpline{1}(Δ)), "Galerkin_BSpline0_BSpline1"),
-                #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+                (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                 (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                 (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
                 (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),)
 
-for (particleshape, particletypename) ∈ particleshapes
-  run(`mkdir -p data/$particleshape`)
-  for (field, fieldtypename) ∈  fieldsolvers
+for (field, fieldtypename) ∈  fieldsolvers
+  run(`mkdir -p data/$fieldtypename`)
+  for (particleshape, particletypename) ∈ particleshapes
     leftpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
     rightpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
     #budge(x) = rand(Bool) ? prevfloat(x) : nextfloat(x)
-    #budge(x) = x + randn() * 1e-8;
+    budge(x) = x + L * randn() * 1e-6;
 
-    #leftpositions .= budge.(leftpositions)
-    #rightpositions .= budge.(rightpositions)
+    leftpositions .= budge.(leftpositions)
+    rightpositions .= budge.(rightpositions)
 
     #leftpositions = rand(NPPCPS * NG) .* L;
     #rightpositions = rand(NPPCPS * NG) .* L;
@@ -73,10 +72,10 @@ for (particleshape, particletypename) ∈ particleshapes
     @assert length(plasma) == NS
     @assert L == v0 == 1.0 # to make things simple for this particular test
     
-    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/9.99)
+    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/7)
 
-    run(`mkdir -p data/$particletypename/$fieldtypename`)
-    stub = "data/$(particletypename)/$(fieldtypename)/"
+    run(`mkdir -p data/$fieldtypename/$particletypename`)
+    stub = "data/$(fieldtypename)/$(particletypename)/"
     
     sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde,
                    endtime=endtime, filenamestub=stub)
@@ -90,7 +89,8 @@ for (particleshape, particletypename) ∈ particleshapes
     x = cellcentres(field)
 
     try
-      run!(sim)
+      init!(sim) # set up to start
+      @time run!(sim)
 
       fileindices = 0:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
       fieldenergies = []
@@ -100,8 +100,12 @@ for (particleshape, particletypename) ∈ particleshapes
 
       anim = @animate for i in fileindices
         sim_i = ElectrostaticPIC1D.load(stub, i)
-        particlecharge = charge(sim_i.plasma)
-        fieldcharge = chargedensity(sim_i.field) * L
+
+        push!(times, sim_i.time[])
+        scatter(positions(sim_i.plasma), velocities(sim_i.plasma), label=nothing)
+
+        #particlecharge = charge(sim_i.plasma)
+        #fieldcharge = chargedensity(sim_i.field) * L
         particleenergy = energy(sim_i.plasma)
         fieldenergy = energydensity(sim_i.field) * L
         particlemomentum = momentum(sim_i.plasma)
@@ -109,13 +113,11 @@ for (particleshape, particletypename) ∈ particleshapes
         #@show maximum(sim_i.field.charge)
         #@show minimum(sim_i.field.electricfield)
         #@show maximum(sim_i.field.electricfield)
-        push!(times, sim_i.time[])
         #@test particlecharge ≈ expectedchargedensity
         #@test fieldcharge ≈ expectedchargedensity
         #@test particleenergy + fieldenergy ≈ expectedenergy rtol=0.01
         #@test particlemomentum ≈ expectedmomentum atol=sqrt(eps()) rtol=1/NP
 
-        scatter(positions(sim_i.plasma), velocities(sim_i.plasma), label=nothing)
         #plot!(x, sim_i.field.electricfield.(x) ./ electricfieldnormalisation, label="E")
         #plot!(x, sim_i.field.charge.(x) ./ expectedchargedensity, label="ρ")
         push!(fieldenergies, fieldenergy)
@@ -126,17 +128,19 @@ for (particleshape, particletypename) ∈ particleshapes
         #plot!((1:i) / maximum(fileindices), particlemomenta / singlepseudoparticlemomentum, label="momentum")
         #xlabel!("Position")
         #ylabel!("Velocity")
-        annotate!(0.05, -2.95, text("$(trunc(sim_i.time[], digits=3))"))
+        annotate!(0.05, -2.95, text("$(trunc(sim_i.time[], digits=3))", :left))
         xlims!(0, L)
         ylims!(-3, 3)
+        annotate!(0.02, 2.9, text("p=$particletypename", :left))
+        annotate!(0.02, 2.6, text("f=$fieldtypename", :left))
       end
-      gif(anim, stub * "animation.gif")
+      @time gif(anim, stub * "animation.gif")
       @save "plotdata.jld2" fieldenergies expectedenergy times growthrate
 
       y = fieldenergies / expectedenergy
       plot(times, log10.(y), label="field energy")
       index = findfirst(y .> 1e-2)
-      index = isnothing(index) ? 1 : index
+      index = isnothing(index) ? 10 : index
       plot!(times, 2*growthrate / log(10) .* (times .- times[index]) .+ log10.(abs.(y[index])),label="predicted")
 
       y = particlemomenta ./ singlepseudoparticlemomentum
@@ -149,7 +153,7 @@ for (particleshape, particletypename) ∈ particleshapes
       ylims!(-35, 1.0)
       savefig(stub * "plot.pdf")
     catch e
-      @show particletypename, fieldtypename
+      @show fieldtypename, particletypename
     end
   end
 end

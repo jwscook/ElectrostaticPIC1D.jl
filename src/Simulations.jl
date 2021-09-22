@@ -42,6 +42,13 @@ function load(filepathstub::String, diagnosticdumpcount::Int)
   return sim
 end
 
+function init!(sim::Simulation)
+  sim.diagnosticdumpcounter[] = -1
+  zero!(sim.field)
+  deposit!(sim.field, sim.plasma)
+  solve!(sim.field)
+  return sim
+end
 function run!(sim::Simulation)
   save(sim) # save initial conditions as file 0
   while time(sim) <= sim.endtime
@@ -56,5 +63,6 @@ function runtimestep!(sim::Simulation)
   if mod(iteration(sim), sim.diagnosticdumpevery) == 0
     save(sim)
   end
+  return sim
 end
 

@@ -4,11 +4,35 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
   L::Float64
   bases::Vector{BasisFunction{S, T}}
   partitionunityweights::Vector{T}
+  buckets::Dict{BasisFunction{TopHatShape,Float64},Set{Int}}
   function FEMGrid{BC}(N::Int, L::Float64, bases::Vector{BasisFunction{S,T}},
       puw=zeros(T, N)) where {BC<:AbstractBC, S<:AbstractShape, T}
     dummy = new{BC, S, T}(N, L, bases, puw)
     puw = solve(dummy, x->1)
-    femgrid = new{BC, S, T}(N, L, bases, puw)
+
+    # Split the grid up into buckets;
+    # Any basisfunction that does not intersect with a key
+    # will also not intersect with any element in the associated value vector.
+    # Therefore to find all bases on the grid intersecting with a basis, B,
+    # simply find the key(s), k, that B intersects with and loop through the
+    # associated value, which itselfis a vector of grid bases interesecting
+    # with the key, k.
+    # N.B. TopHatShape is used simply as an interval
+    nbins = Int(round(sqrt(N))) # make the buckets approx √N "cells" wide
+    bins = collect(0:nbins) ./ nbins * L
+    buckets = Dict{BasisFunction{TopHatShape,Float64}, Set{Int}}()
+    bc = PeriodicGridBC(L)
+    for i ∈ 2:length(bins)
+      l, u = bins[i-1], bins[i]
+      bin = BasisFunction{TopHatShape,Float64}(TopHatShape(u - l), (l + u)/2, NaN) # weight is unimportant
+      contents = Set{Int}()
+      for (index, item) in enumerate(bases)
+        in(translate(item, bin, bc)...) && push!(contents, index)
+      end
+      buckets[bin] = contents
+    end
+
+    femgrid = new{BC, S, T}(N, L, bases, puw, buckets)
     zero!(femgrid)
     return femgrid 
   end
@@ -74,18 +98,103 @@ function solve(l::FEMGrid{BC}, f::F) where {BC, F}
   return x
 end
 
+"""
+    fastdeposit!(l::FEMGrid{BC},particle)where{BC<:AbstractBC}
+
+description
+
+...
+# Arguments
+- `l::FEMGrid{BC}`: 
+- `particlewhere{BC<:AbstractBC}`: 
+...
+
+# Equivalent to
+```julia
 function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
   bc = BC(l.L)
   qw = charge(particle) * weight(particle)
-  d = domainsize(l)
   for (index, item) ∈ enumerate(l)
     item += integral(item, basis(particle), bc) * qw * 
       l.partitionunityweights[index]
   end
   return l
 end
+```
+"""
+function fastdeposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
+  bc = BC(l.L)
+  qw = charge(particle) * weight(particle)
+  # Only deposit from particle into each basis function once
+  # Record which basis functions have recevied deposition in this set
+  processedindices = Set{Int}()
+  for (k, v) ∈ (l.buckets)
+    overlap(k, basis(particle), bc) || continue
+    for index ∈ filter(x->!(x ∈ processedindices), v)
+      item = l.bases[index]
+      item += integral(item, basis(particle), bc) * qw *
+        l.partitionunityweights[index]
+      push!(processedindices, index)
+    end
+  end
+  return l
+end
+
+
+"""
+    fastantideposit(l::FEMGrid{BC},particle)where{BC<:AbstractBC}
+
+description
+
+...
+# Arguments
+- `l::FEMGrid{BC}`: 
+- `particlewhere{BC<:AbstractBC}`: 
+...
+
+# Example
+```julia
+function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
+  bc = BC(l.L)
+  amount = 0.0
+  for (index, item) ∈ enumerate(l)
+    amount += integral(item, basis(particle), bc) * weight(item)
+  end
+  return amount
+end
+```
+"""
+function fastantideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
+  bc = BC(l.L)
+  # Only antideposit from each basis function once
+  # Record which basis functions have been processed already
+  processedindices = Set{Int}()
+  amount = 0.0
+  for (k, v) ∈ l.buckets
+    overlap(k, basis(particle), bc) || continue
+    for index ∈ filter(x->!(x ∈ processedindices), v)
+      item = l.bases[index]
+      amount += integral(item, basis(particle), bc) * weight(item)
+      push!(processedindices, index)
+    end
+  end
+  return amount
+end
+
+
+function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
+#  return fastdeposit!(l, particle)
+  bc = BC(l.L)
+  qw = charge(particle) * weight(particle)
+  for (index, item) ∈ enumerate(l)
+    item += integral(item, basis(particle), bc) * qw *
+      l.partitionunityweights[index]
+  end
+  return l
+end
 
 function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
+#  return fastantideposit(l, particle)
   bc = BC(l.L)
   amount = 0.0
   for (index, item) ∈ enumerate(l)
@@ -111,7 +220,9 @@ struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractFEMField{BC}
       ) where {BC,S,T,L<:FEMGrid{BC,S,T}}
     @assert chargedensity.N == electricfield.N
     @assert chargedensity.L == electricfield.L
-    return new{BC,S,T}(chargedensity, electricfield)
+    lsfem = new{BC,S,T}(chargedensity, electricfield)
+    solve!(lsfem)
+    return lsfem
   end
 end
 LSFEMField(a::FEMGrid) = LSFEMField(a, deepcopy(a))
@@ -128,7 +239,9 @@ struct GalerkinFEMField{BC, S1<:AbstractShape, S2<:AbstractShape, T
   function GalerkinFEMField(chargedensity::FEMGrid{BC,S1,T}, electricfield::FEMGrid{BC,S2,T}
       ) where {BC,S1,S2,T}
     @assert chargedensity.L == electricfield.L
-    return new{BC,S1,S2,T}(chargedensity, electricfield)
+    galerkin = new{BC,S1,S2,T}(chargedensity, electricfield)
+    solve!(galerkin)
+    return galerkin
   end
 end
 function GalerkinFEMField(N::Int, L::Real, chargeshape::S1, efieldshape::S2

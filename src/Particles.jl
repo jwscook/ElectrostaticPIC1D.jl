@@ -62,6 +62,7 @@ function pushvelocity!(p::Particle, E::Number, dt)
   p.velocity += charge_mass_ratio(p) * E * dt
   return p
 end
+import Base.push!
 Base.push!(p::Particle, E, dt, bc) = (pushposition!(p, dt, bc); pushvelocity!(p, E, dt); p)
 
 function pushvelocity!(p::Particle, f::AbstractField, dt)

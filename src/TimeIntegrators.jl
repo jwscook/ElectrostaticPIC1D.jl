@@ -23,9 +23,7 @@ function (ti::LeapFropTimeIntegrator)(plasma, field::AbstractField{BC}, dt=nothi
   pushposition!(plasma, dt / 2, bc)
   zero!(field)
   deposit!(field, plasma)
-#  @show unique(diff(field.charge.values))
   solve!(field)
-#  @show unique(diff(field.electricfield.values))
   pushvelocity!(plasma, field, dt)
   pushposition!(plasma, dt / 2, bc)
   return nothing
