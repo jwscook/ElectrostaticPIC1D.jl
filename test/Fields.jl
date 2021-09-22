@@ -92,7 +92,7 @@ end
 
       fieldcharge = chargedensity(f) * L
       expectedfieldcharge = QuadGK.quadgk(frho, 0.0, L, rtol=eps(), order=27)[1]
-      @test fieldcharge ≈ expectedfieldcharge atol=1e-12 rtol=100eps()
+      @test fieldcharge ≈ expectedfieldcharge atol=1e-12 rtol=sqrt(eps())
 
       fieldenergy = energydensity(f; rtol=1000eps())
       expectedfieldenergy = QuadGK.quadgk(x->fefield(x)^2 / 2, 0.0, L,
@@ -104,15 +104,10 @@ end
 
   @testset "Galerkin" begin
 
-  @testset "BSpline{0} BSpline{1}" begin
-    nrms, Ns = _dotest(GalerkinFEMField, BSpline{1}, BSpline{2}; verbose=false)
-    p = findpower(1 ./ Ns, nrms)
-    @test p ≈ 2 rtol = 0.1
-  end
   @testset "BSpline{1} BSpline{2}" begin
     nrms, Ns = _dotest(GalerkinFEMField, BSpline{1}, BSpline{2}; verbose=false)
     p = findpower(1 ./ Ns, nrms)
-    @test p ≈ 2 rtol = 0.1
+    @test p >= 1.99
   end
 
   end # Galerkin
