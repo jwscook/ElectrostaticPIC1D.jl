@@ -112,11 +112,20 @@ end
 
 function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
     p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
-  lower(p) <= lower(a) && upper(a) < upper(p) && lower(p) <= lower(b) && upper(b) < upper(p) && return (a, b) 
   in(a, b) && return (a, b)
   t = translate(a, length(p)); in(t, b) && return (t, b)
   t = translate(a,-length(p)); in(t, b) && return (t, b)
   return (a, b)
+  #lower(p) <= lower(a) && upper(a) < upper(p) && lower(p) <= lower(b) && upper(b) < upper(p) && return (a, b) 
+  #in(a, b) && return (a, b)
+  #if lower(a) < lower(p)
+  #  t = translate(a, length(p))
+  #  in(t, b) && return (t, b)
+  #elseif upper(a) > upper(p)
+  #  t = translate(a,-length(p))
+  #  in(t, b) && return (t, b)
+  #end
+  #return (a, b)
 end
 
 (b::BasisFunction)(x::Number) = b.shape(x, b.centre)

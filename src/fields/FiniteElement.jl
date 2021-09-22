@@ -47,7 +47,19 @@ function FEMGrid(N::Int, L::Float64, shape::S, ::Type{BC}=PeriodicGridBC
 end
 
 function (l::FEMGrid{BC})(x) where {BC}
-  return sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
+#  return sum(i(x, BC(0.0, l.L)) * weight(i) for i ∈ l)
+  bc = BC(l.L)
+  processedindices = Set{Int}()
+  amount = 0.0
+  for (k, v) ∈ l.buckets
+    in(x, k) || continue
+    for index ∈ filter(x->!(x ∈ processedindices), v)
+      item = l.bases[index]
+      amount += item(x, bc) * weight(item)
+      push!(processedindices, index)
+    end
+  end
+  return amount
 end
 Base.size(f::FEMGrid) = (f.N,)
 Base.iterate(f::FEMGrid) = iterate(f.bases)
@@ -105,8 +117,8 @@ description
 
 ...
 # Arguments
-- `l::FEMGrid{BC}`: 
-- `particlewhere{BC<:AbstractBC}`: 
+- `l::FEMGrid{BC}`:
+- `particlewhere{BC<:AbstractBC}`:
 ...
 
 # Equivalent to
@@ -183,24 +195,24 @@ end
 
 
 function deposit!(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
-#  return fastdeposit!(l, particle)
-  bc = BC(l.L)
-  qw = charge(particle) * weight(particle)
-  for (index, item) ∈ enumerate(l)
-    item += integral(item, basis(particle), bc) * qw *
-      l.partitionunityweights[index]
-  end
-  return l
+  return fastdeposit!(l, particle)
+  #bc = BC(l.L)
+  #qw = charge(particle) * weight(particle)
+  #for (index, item) ∈ enumerate(l)
+  #  item += integral(item, basis(particle), bc) * qw *
+  #    l.partitionunityweights[index]
+  #end
+  #return l
 end
 
 function antideposit(l::FEMGrid{BC}, particle) where {BC<:AbstractBC}
-#  return fastantideposit(l, particle)
-  bc = BC(l.L)
-  amount = 0.0
-  for (index, item) ∈ enumerate(l)
-    amount += integral(item, basis(particle), bc) * weight(item)
-  end
-  return amount
+  return fastantideposit(l, particle)
+  #bc = BC(l.L)
+  #amount = 0.0
+  #for (index, item) ∈ enumerate(l)
+  #  amount += integral(item, basis(particle), bc) * weight(item)
+  #end
+  #return amount
 end
 
 
@@ -213,6 +225,13 @@ function update!(l::FEMGrid{BC}, f::F) where {BC, F}
 end
 abstract type AbstractFEMField{BC} <: AbstractField{BC} end
 
+"""
+    GalerkinFEMField
+
+Using basis function, u to represent both the charge density the
+the electric field, solve for the latter from the former via:
+    ∫ u' v'dx = ∫ u' v dx.
+"""
 struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractFEMField{BC}
   chargedensity::FEMGrid{BC,S,T}
   electricfield::FEMGrid{BC,S,T}
@@ -220,9 +239,7 @@ struct LSFEMField{BC, S<:AbstractShape, T} <: AbstractFEMField{BC}
       ) where {BC,S,T,L<:FEMGrid{BC,S,T}}
     @assert chargedensity.N == electricfield.N
     @assert chargedensity.L == electricfield.L
-    lsfem = new{BC,S,T}(chargedensity, electricfield)
-    solve!(lsfem)
-    return lsfem
+    return new{BC,S,T}(chargedensity, electricfield)
   end
 end
 LSFEMField(a::FEMGrid) = LSFEMField(a, deepcopy(a))
@@ -232,6 +249,13 @@ numberofunknowns(l::AbstractFEMField) = numberofunknowns(l.chargedensity)
 
 zero!(f::AbstractFEMField) = map(zero!, (f.chargedensity, f.electricfield))
 
+"""
+    GalerkinFEMField
+
+Using basis function, u, to represent the charge density and v to represent the
+the electric field, solve for the latter from the former via:
+    -∫ u' v'dx = ∫ u v' dx.
+"""
 struct GalerkinFEMField{BC, S1<:AbstractShape, S2<:AbstractShape, T
     } <: AbstractFEMField{BC}
   chargedensity::FEMGrid{BC,S1,T}
@@ -239,9 +263,7 @@ struct GalerkinFEMField{BC, S1<:AbstractShape, S2<:AbstractShape, T
   function GalerkinFEMField(chargedensity::FEMGrid{BC,S1,T}, electricfield::FEMGrid{BC,S2,T}
       ) where {BC,S1,S2,T}
     @assert chargedensity.L == electricfield.L
-    galerkin = new{BC,S1,S2,T}(chargedensity, electricfield)
-    solve!(galerkin)
-    return galerkin
+    return new{BC,S1,S2,T}(chargedensity, electricfield)
   end
 end
 function GalerkinFEMField(N::Int, L::Real, chargeshape::S1, efieldshape::S2
@@ -251,7 +273,7 @@ end
 
 # Pull a special trick to solve circulant matrix that pops out of periodic BCs
 """
-    gausslawsolve(f::AbstractFEMField{PeriodicGridBC})
+    fieldsolve(f::AbstractFEMField{PeriodicGridBC})
 
 Solve Gauss's law to obtain the electric field from the chargedensity
 The periodic boundary condition creates a circulant Symmetric matrix,
@@ -268,7 +290,7 @@ Other solution methods are eigen decomposition (n^3) and regularisation.
 ```julia
 ```
 """
-@memoize function gausslawsolve(field::AbstractFEMField{PeriodicGridBC})
+@memoize function fieldsolve(field::AbstractFEMField{PeriodicGridBC})
   A = massmatrix(field)
   b = forcevector(field)
   x = if Circulant(A) ≈ A
@@ -293,7 +315,7 @@ Other solution methods are eigen decomposition (n^3) and regularisation.
   return x
 end
 
-@memoize function gausslawsolve(f::AbstractFEMField{BC}) where {BC}
+@memoize function fieldsolve(f::AbstractFEMField{BC}) where {BC}
   A = massmatrix(f)
   b = forcevector(f)
   p = AMGPreconditioner{SmoothedAggregation}(A)
@@ -304,7 +326,7 @@ postsolve!(x, ::Type{AbstractBC}) = x
 postsolve!(x, ::Type{PeriodicGridBC}) = demean!(x)
 function solve!(f::AbstractFEMField{BC}) where {BC}
   x = try
-    gausslawsolve(f)
+    fieldsolve(f)
   catch err
     A = massmatrix(f)
     b = forcevector(f)
@@ -314,6 +336,10 @@ function solve!(f::AbstractFEMField{BC}) where {BC}
   end
   f.electricfield .= postsolve!(x, BC)
   return f
+end
+
+function quadrature(integrand::F, intervals) where {F}
+  return QuadGK.quadgk(integrand, intervals..., order=7, rtol=2eps())[1]
 end
 
 function lsfemmassmatrixintegral(u::BasisFunction{GaussianShape},
@@ -330,14 +356,12 @@ function lsfemmassmatrixintegral(u::BasisFunction, v::BasisFunction, cache)
 end
 function _lsfemmassmatrixintegral(u, v, cache) 
   integrand(x) = ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x)
-  return get!(()->QuadGK.quadgk(integrand,
-    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
+  return get!(()->quadrature(integrand, knots(u, v)), cache, getkey(u, v))
 end
 
 function lsfemstiffnessmatrixintegral(u, v, cache)
-  return get!(()->QuadGK.quadgk(
-    x->ForwardDiff.derivative(u, x) * v(x),
-    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
+  integrand(x) = ForwardDiff.derivative(u, x) * v(x)
+  return get!(()->quadrature(integrand, knots(u, v)), cache, getkey(u, v))
 end
 
 function galerkinmassmatrixintegral(u::BasisFunction,
@@ -345,17 +369,13 @@ function galerkinmassmatrixintegral(u::BasisFunction,
   return  _galerkinmassmatrixintegral(u, v, cache)
 end
 function _galerkinmassmatrixintegral(u, v, cache)
-  function integrand(x)
-    return u(x) * ForwardDiff.derivative(y->ForwardDiff.derivative(v, y), x)
-  end
-  return get!(()->QuadGK.quadgk(integrand,
-    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
+  integrand(x) = -ForwardDiff.derivative(u, x) * ForwardDiff.derivative(v, x)
+  return get!(()->quadrature(integrand, knots(u, v)), cache, getkey(u, v))
 end
 
 function galerkinstiffnessmatrixintegral(u, v, cache)
   integrand(x) = u(x) * ForwardDiff.derivative(v, x)
-  return get!(()->QuadGK.quadgk(integrand,
-    lower(u, v), upper(u, v), rtol=2eps())[1], cache, getkey(u, v))
+  return get!(()->quadrature(integrand, knots(u, v)), cache, getkey(u, v))
 end
 
 massmatrixintegral(::LSFEMField) = lsfemmassmatrixintegral
