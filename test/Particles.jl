@@ -119,7 +119,6 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
               answer = electricfield(field, particle)
               approxexpected = expectedelectricfield(centre(particle))
               @test answer ≈ approxexpected rtol=0.1 atol=E0/1000
-              #@show fname, answer / approxexpected
               answer = chargedensity(field, particle)
               approxexpected = chargedensityfun(centre(particle))
               @test answer ≈ approxexpected rtol=0.1 atol=ρ0/1000

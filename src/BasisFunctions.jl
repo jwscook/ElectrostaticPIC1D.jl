@@ -112,6 +112,7 @@ end
 
 function translate(a::BasisFunction{S1}, b::BasisFunction{S2},
     p::PeriodicGridBC) where {S1<:AbstractShape, S2<:AbstractShape}
+  lower(p) <= lower(a) && upper(a) < upper(p) && lower(p) <= lower(b) && upper(b) < upper(p) && return (a, b) 
   in(a, b) && return (a, b)
   t = translate(a, length(p)); in(t, b) && return (t, b)
   t = translate(a,-length(p)); in(t, b) && return (t, b)
@@ -131,9 +132,12 @@ function overlap(a::BasisFunction, b::BasisFunction)
   return lower(a) == lower(b) || (lower(a) < upper(b) && upper(a) > lower(b))
 end
 Base.in(a::BasisFunction, b::BasisFunction) = overlap(a, b)
+function overlap(u::BasisFunction, v::BasisFunction, p::PeriodicGridBC)
+  return in(translate(u, v, p)...)
+end
 
 
-function integral(b::BasisFunction{DeltaFunctionShape}, f::F, _::AbstractBC) where {F}
+function integral(b::BasisFunction{DeltaFunctionShape}, f::F, _::AbstractBC) where {F<:Function}
   return f(centre(b))
 end
 

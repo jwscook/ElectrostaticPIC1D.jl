@@ -15,15 +15,20 @@ struct FourierField{BC<:PeriodicGridBC, T} <: AbstractField{BC}
   chargedensity::EquispacedValueGrid{BC,T}
   electricfield::EquispacedValueGrid{BC,T}
   helper::PeriodicFourierWorkspace
+  function FourierField(chargedensity::EquispacedValueGrid{BC,T},
+      electricfield::EquispacedValueGrid{BC,T}) where {BC<:PeriodicGridBC,T}
+    helper = PeriodicFourierWorkspace(first(size(chargedensity)), chargedensity.L)
+    zero!(electricfield)
+    fourier = new{BC,T}(chargedensity, electricfield, helper)
+    solve!(fourier)
+    return fourier
+  end
+end
+function FourierField(chargedensity::EquispacedValueGrid{PeriodicGridBC})
+  return FourierField(chargedensity, deepcopy(chargedensity))
 end
 function FourierField(N::Int, L::Real)
   return FourierField(EquispacedValueGrid(N, L, PeriodicGridBC))
-end
-function FourierField(chargedensity::EquispacedValueGrid{PeriodicGridBC})
-  electricfield = deepcopy(chargedensity)
-  zero!(electricfield)
-  return FourierField(chargedensity, electricfield,
-    PeriodicFourierWorkspace(first(size(chargedensity)), chargedensity.L))
 end
 
 zero!(f::FourierField) = (zero!(f.chargedensity), zero!(f.electricfield))

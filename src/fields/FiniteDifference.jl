@@ -87,6 +87,13 @@ struct FiniteDifferenceField{BC<:PeriodicGridBC, T, A} <: AbstractField{BC}
   chargedensity::EquispacedValueGrid{BC,T}
   electricfield::EquispacedValueGrid{BC,T}
   integrator::PeriodicFiniteIntegratorOperator{A,T}
+  function FiniteDifferenceField(chargedensity::EquispacedValueGrid{BC,T},
+                                 electricfield::EquispacedValueGrid{BC,T},
+                                 integrator::PeriodicFiniteIntegratorOperator{A,T}) where {BC,T,A}
+    finitediff = new{BC,T,A}(chargedensity, electricfield, integrator)
+    zero!(finitediff)
+    return finitediff
+  end
 end
 function FiniteDifferenceField(chargedensity::EquispacedValueGrid{PeriodicGridBC};
                                order::Int=2)

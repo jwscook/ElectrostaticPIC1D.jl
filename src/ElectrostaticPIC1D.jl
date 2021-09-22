@@ -34,6 +34,6 @@ export Plasma, Species, positions, velocities
 include("TimeIntegrators.jl")
 export LeapFrogTimeIntegrator, LeapFrogTimeIntegrator
 include("Simulations.jl")
-export Simulation, SimulationParameters, run!
+export Simulation, SimulationParameters, run!, init!
 
 end # module
