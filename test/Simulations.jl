@@ -2,7 +2,7 @@ using Distributed
 
 addprocs(Sys.CPU_THREADS ÷ 2)
 
-@everywhere using ElectrostaticPIC1D, JLD2, Plots, Random, Test, ThreadsX
+@everywhere using ElectrostaticPIC1D, FFTW, JLD2, Plots, Random, Test, ThreadsX
 @everywhere Random.seed!(0)
 
 @everywhere function go(;NG=64, NPPCPS=16, L=1.0, nvortexpergrid=1,
@@ -20,7 +20,8 @@ addprocs(Sys.CPU_THREADS ÷ 2)
   # division by √2 because this is plasma frequency for a single species
   density = plasmafrequency^2 / q^2 * m # plasma number density per species
   weight = density * L / (NPPCPS * NG) # weight of each particle
-  normalisedgrowthrate(x) = imag(sqrt(Complex(x^2+1-sqrt(4*x^2+1))))
+  analyticresult(x; op, sign) = op(sqrt(Complex(x^2+1 + sign * sqrt(4*x^2+1))))
+  normalisedgrowthrate(x) = analyticresult(x; op=imag, sign=-1)
   wavenumbers = 2*pi/L * (1:NG/2)
   normalisedgamma, fastestgrowingmode = findmax(normalisedgrowthrate.(v0 .* wavenumbers / plasmafrequency))
   growthrate = normalisedgamma * plasmafrequency
@@ -95,21 +96,24 @@ addprocs(Sys.CPU_THREADS ÷ 2)
     x = cellcentres(field)
     dryrunabort && return nothing
 
+
     try
       sim = Simulation(plasma, field, ti, diagnosticdumpevery=10,
-        endtime=10.0, filenamestub=stub)
+        endtime=15.0, filenamestub=stub)
 
       init!(sim) # set up to start
       @time run!(sim)
 
       fileindices = 0:ElectrostaticPIC1D.diagnosticdumpcounter(sim)
+      Ex = zeros(length(x), length(fileindices))
+      Rho = zeros(length(x), length(fileindices))
       fieldenergies = []
       particleenergies = []
       particlemomenta = []
       times = []
 
-      anim = @animate for i in fileindices
-        sim_i = ElectrostaticPIC1D.load(stub, i)
+      anim = @animate for (i, fileindex) in enumerate(fileindices)
+        sim_i = ElectrostaticPIC1D.load(stub, fileindex)
 
         push!(times, sim_i.time[])
         scatter(positions(sim_i.plasma), velocities(sim_i.plasma), label=nothing)
@@ -128,6 +132,8 @@ addprocs(Sys.CPU_THREADS ÷ 2)
         #@test particleenergy + fieldenergy ≈ expectedenergy rtol=0.01
         #@test particlemomentum ≈ expectedmomentum atol=sqrt(eps()) rtol=1/NP
 
+        Ex[:, i] .= sim_i.field.electricfield.(x) ./ electricfieldnormalisation
+        Rho[:, i] .= sim_i.field.chargedensity.(x) ./ expectedchargedensity
         plot!(x, sim_i.field.electricfield.(x) ./ electricfieldnormalisation, label="E")
         plot!(x, sim_i.field.chargedensity.(x) ./ expectedchargedensity, label="ρ")
         push!(fieldenergies, fieldenergy)
@@ -163,9 +169,29 @@ addprocs(Sys.CPU_THREADS ÷ 2)
       xlims!(0, maximum(times))
       ylims!(-17, 1.0)
       savefig(stub * "plot.pdf")
+
+      for (Z, fieldstring) ∈ ((Ex, "Ex"), (Rho, "Rho"))
+        LogAbsFFTEx = log10.(abs.(fft(Z')));
+        LogAbsFFTEx[:, 1] *= NaN; # zeros on the log10 colorbar destroy the contrast
+        LogAbsFFTEx[:, (end÷2) + 1 ] *= NaN;
+        ks = (-NG÷2 : NG÷2 - 1)
+        ws = (0:length(times)÷2) ./ times[end] / (plasmafrequency / 2π)
+        heatmap(ks, ws, fftshift(LogAbsFFTEx)[(end÷2)+1:end, :])
+        xlabel!("Wavenumber [Waves per box]")
+        ylabel!("Frequency [Π]")
+        plot!(ks, analyticresult.(v0 .* ks * (2π/L) / plasmafrequency; op=imag, sign=-1), label="")
+        plot!(ks, analyticresult.(v0 .* ks * (2π/L) / plasmafrequency; op=real, sign=-1), label="")
+        plot!(ks, analyticresult.(v0 .* ks * (2π/L) / plasmafrequency; op=real, sign=+1), label="")
+        ylims!(0, maximum(ws))
+        xlims!(ks[1], ks[end])
+        savefig(stub * "$(fieldstring)_dispersionrelation.pdf")
+      end
+      @save stub * "dispersionrelation.jld2" Ex Rho times x L plasmafrequency
+
     catch e
       @show fieldtypename, particletypename
       @show e
+      rethrow(e)
     end
 
     return nothing
