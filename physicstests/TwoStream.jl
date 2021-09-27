@@ -17,7 +17,6 @@ addprocs(Sys.CPU_THREADS ÷ 2)
   q = m = 1.0 # charge, mass
   v0 = 1.0 # particle speed
   plasmafrequency = 2/√3 * v0 * nvortexpergrid * 2π/L
-  # division by √2 because this is plasma frequency for a single species
   density = plasmafrequency^2 / q^2 * m # plasma number density per species
   weight = density * L / (NPPCPS * NG) # weight of each particle
   analyticresult(x; op, sign) = op(sqrt(Complex(x^2+1 + sign * sqrt(4*x^2+1))))
@@ -34,19 +33,19 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 
   particleshapes = ((DeltaFunctionShape(), "Delta"),
                     (GaussianShape(Δ), "Gaussian"),
-                    (BSpline{0}(Δ), "BSpline0"),
-                    (BSpline{1}(Δ), "BSpline1"),
-                    (BSpline{2}(Δ), "BSpline2"),
+                    #(BSpline{0}(Δ), "BSpline0"),
+                    #(BSpline{1}(Δ), "BSpline1"),
+                    #(BSpline{2}(Δ), "BSpline2"),
                     )
 
-  fieldsolvers = ((FourierField(NG,L), "Fourier"),
+  fieldsolvers = (#(FourierField(NG,L), "Fourier"),
                   (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
                   (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
                   (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-                  (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
-                  (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
-                  (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
-                  (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
+                  #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+                  #(FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
+                  #(FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
+                  #(FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
                   )
 
   particleics = Dict()
@@ -54,9 +53,9 @@ addprocs(Sys.CPU_THREADS ÷ 2)
   leftpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
   rightpositions = mod.((bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64 .+ rand(), 1) * L
 
-  particleics[:Quiet] = deepcopy((leftpositions, rightpositions))
+  #particleics[:Quiet] = deepcopy((leftpositions, rightpositions))
 
-  budge(x) = x + L * 2(rand() - 0.5) * 1e-4;
+  budge(x) = x + (rand() - 0.5) * Δ / NPPCPS / 10;
 
   particleics[:Muffled] = deepcopy((budge.(leftpositions), budge.(rightpositions)))
 
@@ -204,5 +203,5 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 end
 
 @testset "Simulations" begin
-  go()
+  go(; datadir="data_twostream")
 end

@@ -2,4 +2,5 @@
 *.jld*
 docs/build
 data/
+data*/
 
