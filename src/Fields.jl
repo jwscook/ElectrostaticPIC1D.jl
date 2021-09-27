@@ -44,7 +44,6 @@ end
 
 import Base.copy!
 function Base.copy!(a::AbstractField, b::AbstractField)
-
   a.chargedensity .= b.chargedensity # TODO make this and next line good
   a.electricfield .= b.electricfield # TODO make this and prev line good
   return a

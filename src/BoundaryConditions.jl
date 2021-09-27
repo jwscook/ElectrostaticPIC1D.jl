@@ -16,6 +16,7 @@ Base.:<(x::Number, p::PeriodicGridBC) = x < p.lower
 Base.:>(x::Number, p::PeriodicGridBC) = x > p.upper
 
 function (p::PeriodicGridBC)(x::Number)
+  @assert isfinite(x)
   x ∈ p && return x
   x < p && return p(x + length(p))
   x > p && return p(x - length(p))

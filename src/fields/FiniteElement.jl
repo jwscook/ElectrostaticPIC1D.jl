@@ -116,7 +116,7 @@ function solve(A::AbstractMatrix, b::AbstractVector)
     A⁻¹ = real.(v * diagm(idu) * inv(v))
     demean!(A⁻¹ * b)
   end
-  @assert !any(isnan.(x))
+  @assert all(isfinite, x)
   return x
 end
 

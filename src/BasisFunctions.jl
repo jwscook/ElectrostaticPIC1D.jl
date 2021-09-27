@@ -84,6 +84,7 @@ function getkey(u::BasisFunction, v::BasisFunction)::UInt64
   return foldr(hash, hashtuple; init=hash(typeof(u), hash(typeof(v))))
 end
 function translate(b::BasisFunction, x::Number)
+  @assert isfinite(x)
   translated = deepcopy(b)
   translated.centre += x
   return translated
@@ -92,7 +93,7 @@ function translate!(b::BasisFunction, x::Number, bc::AbstractBC)
   b.centre = bc(b.centre + x)
   return b
 end
-Base.:+(b::BasisFunction, x) = (b.weight += x; b)
+Base.:+(b::BasisFunction, x) = (@assert isfinite(x); b.weight += x; b)
 
 zero!(b::BasisFunction) = (b.weight *= false)
 function Base.in(x::Number, b::BasisFunction)

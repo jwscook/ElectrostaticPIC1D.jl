@@ -66,6 +66,8 @@ import Base.push!
 Base.push!(p::Particle, E, dt, bc) = (pushposition!(p, dt, bc); pushvelocity!(p, E, dt); p)
 
 function pushvelocity!(p::Particle, f::AbstractField, dt)
-  return pushvelocity!(p, electricfield(f, p), dt)
+  E = electricfield(f, p)
+  @assert isfinite(E)
+  return pushvelocity!(p, E, dt)
 end
 
