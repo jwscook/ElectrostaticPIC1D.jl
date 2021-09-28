@@ -1,12 +1,11 @@
 using Distributed
 
-addprocs(2)
-#addprocs(Sys.CPU_THREADS ÷ 2)
+addprocs(Sys.CPU_THREADS ÷ 2)
 
 @everywhere using ElectrostaticPIC1D, FFTW, JLD2, Plots, Random, SpecialFunctions, Test, ThreadsX
 @everywhere Random.seed!(0)
 
-@everywhere function go(;NG=64, NPPCPS=16, L=1.0, nvortexpergrid=1,
+@everywhere function go(;NG=256, NPPCPS=16, L=1.0, nvortexpergrid=1,
     cleandatadir=true, dryrunabort=false, datadir="data")
 #  NG = 64 # number of grid points
 #  NPPCPS = 16 # number of particles per cell per species
@@ -16,13 +15,15 @@ addprocs(2)
   Δ = L / NG
   NS = 2 # number of species
   NP = NPPCPS * NG * NS # total number of particles
-  q0 = me = T = 1 # electron charge, mass and temperature are all unity
+  q0 = me = Te = 1 # electron charge, mass and temperature are all unity
+  mi = 1836 * 2 * me
+  Ti = Te
   # unit temperature, unit electron mass, so Debye length is 2π / Πₑ
   # Set Debye length = Δ, so Πₑ = 1 / Δ
-  electronplasmafrequency = sqrt(T / me) / Δ
+  debyelength = Δ
+  electronplasmafrequency = sqrt(Te / me) / debyelength
   density = electronplasmafrequency^2 / q0^2 * me # plasma number density for electrons
   weight = density * L / (NPPCPS * NG) # weight of each particle
-  mi = 1836 * 2 * me
 
   electronnuclide = Nuclide(-q0, me) # electron
   ionnuclide = Nuclide(q0, mi) # ion
@@ -51,8 +52,8 @@ addprocs(2)
   x1 = (bitreverse.(0:NPPCPS * NG-1) .+ 2.0^63) / 2.0^64
   xe = mod.(x1, L)
   xi = mod.(x1, L)
-  ve = erfinv.(2 .* mod.(x1 .+ π, 1) .- 1) .* √(T / me)
-  vi = erfinv.(2 .* mod.(x1 .+ π, 1) .- 1) .* √(T / mi)
+  ve = erfinv.(2 .* mod.(x1 .+ π, 1) .- 1) .* √(Te / me)
+  vi = erfinv.(2 .* mod.(x1 .+ π, 1) .- 1) .* √(Ti / mi)
   @assert all(isfinite, xe)
   @assert all(isfinite, xi)
   @assert all(isfinite, ve)
@@ -83,15 +84,15 @@ addprocs(2)
 
     expectedenergy = weight * NP / 2
     expectedmomentum = 0.0
-    @show chargedensitynormalisation = weight * NP * (abs(charge(electronnuclide)) + abs(charge(ionnuclide)))
-    @show electricfieldnormalisation = chargedensitynormalisation * L / NG
+    chargedensitynormalisation = weight * NP * (abs(charge(electronnuclide)) + abs(charge(ionnuclide)))
+    electricfieldnormalisation = chargedensitynormalisation * L / NG
 
     x = cellcentres(field)
     dryrunabort && return nothing
 
-
     try
-      sim = Simulation(plasma, field, ti, endtime=10.0, filenamestub=stub)
+      sim = Simulation(plasma, field, ti, diagnosticdumpevery=2,
+                       endtime=10.0, filenamestub=stub)
 
       init!(sim) # set up to start
       @time run!(sim)
@@ -160,7 +161,7 @@ addprocs(2)
         heatmap(ks, ws, Z1)
         xlabel!("Wavenumber [Waves per box]")
         ylabel!("Frequency [Π]")
-        ylims!(0, maximum(ws))
+        ylims!(0, min(3, maximum(ws)))
         xlims!(ks[1], ks[end])
         savefig(stub * "$(fieldstring)_dispersionrelation.pdf")
       end

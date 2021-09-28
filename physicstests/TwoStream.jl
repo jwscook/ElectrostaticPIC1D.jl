@@ -38,11 +38,11 @@ addprocs(Sys.CPU_THREADS ÷ 2)
                     #(BSpline{2}(Δ), "BSpline2"),
                     )
 
-  fieldsolvers = (#(FourierField(NG,L), "Fourier"),
+  fieldsolvers = ((FourierField(NG,L), "Fourier"),
                   (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
                   (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
                   (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-                  #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+                  (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                   #(FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                   #(FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
                   #(FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
