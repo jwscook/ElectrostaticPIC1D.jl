@@ -1,6 +1,7 @@
 using Distributed
 
-addprocs(Sys.CPU_THREADS ÷ 2)
+#addprocs(Sys.CPU_THREADS ÷ 2)
+addprocs(2)
 
 @everywhere using ElectrostaticPIC1D, FFTW, JLD2, Plots, Random, Test, ThreadsX
 @everywhere Random.seed!(0)
@@ -33,16 +34,16 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 
   particleshapes = ((DeltaFunctionShape(), "Delta"),
                     (GaussianShape(Δ), "Gaussian"),
-                    #(BSpline{0}(Δ), "BSpline0"),
-                    #(BSpline{1}(Δ), "BSpline1"),
-                    #(BSpline{2}(Δ), "BSpline2"),
+                    (BSpline{0}(Δ), "BSpline0"),
+                    (BSpline{1}(Δ), "BSpline1"),
+                    (BSpline{2}(Δ), "BSpline2"),
                     )
 
   fieldsolvers = ((FourierField(NG,L), "Fourier"),
-                  (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
-                  (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
-                  (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
-                  (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
+                  #(LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
+                  #(LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
+                  #(LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
+                  #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                   #(FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                   #(FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
                   #(FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
@@ -84,7 +85,9 @@ addprocs(Sys.CPU_THREADS ÷ 2)
     @assert length(plasma) == NS
     @assert L == v0 == 1.0 # to make things simple for this particular test
 
-    ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=1/7)
+    cfl = 2.1
+    #ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=cfl)
+    ti = SemiImplicit2ndOrderTimeIntegrator(plasma, field; cflmultiplier=cfl, rtol=10eps())
 
     expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
     expectedmomentum = 0.0
@@ -95,9 +98,9 @@ addprocs(Sys.CPU_THREADS ÷ 2)
     x = cellcentres(field)
     dryrunabort && return nothing
 
-
+    dde = Int(ceil(1 / cfl))
     try
-      sim = Simulation(plasma, field, ti, diagnosticdumpevery=10,
+      sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde,
         endtime=15.0, filenamestub=stub)
 
       init!(sim) # set up to start
@@ -198,10 +201,10 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 
   inputs = Iterators.product(particleshapes, fieldsolvers, particleics)
 
-  pmap(innerloop, inputs)
+  map(innerloop, inputs)
 
 end
 
 @testset "Simulations" begin
-  go(; datadir="data_twostream")
+  go(; datadir="data_twostream_implicit")
 end

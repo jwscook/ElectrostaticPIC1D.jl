@@ -48,3 +48,11 @@ function Base.copy!(a::AbstractField, b::AbstractField)
   a.electricfield .= b.electricfield # TODO make this and prev line good
   return a
 end
+
+import Base.isapprox
+function Base.isapprox(a::AbstractField, b::AbstractField; atol=0.0, rtol=sqrt(eps()))
+  for (i, j) ∈ zip(a, b)
+    isapprox(i, j, atol=atol, rtol=rtol) || return false
+  end
+  return true
+end

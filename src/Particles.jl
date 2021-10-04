@@ -33,6 +33,12 @@ end
 velocity(p::Particle) = p.velocity
 basis(p::Particle) = p.basis
 Base.position(p::Particle) = centre(p)
+function Base.copy!(a::Particle{S}, b::Particle{S}) where {S}
+  @assert a.nuclide == b.nuclide "copy! is not intended for use between species"
+  a.velocity = b.velocity
+  copy!(a.basis, b.basis)
+  return a
+end
 
 for op ∈ (:weight, :lower, :upper, :width, :centre)
   @eval $op(p::Particle) = $op(basis(p))
@@ -42,16 +48,28 @@ for op ∈ (:mass, :charge, :charge_mass_ratio)
 end
 for op ∈ (:-, :+)
   @eval function Base.$op(a::Particle{S}, b::Particle{S}) where {S<:AbstractShape}
-    @assert a.nuclude == b.nuclude
-    return Particle(a.nuclude, $op(a.basis, b.basis), $op(a.velocity, b.velocity))
+    @assert a.nuclide == b.nuclide
+    return Particle(a.nuclide, $op(a.basis, b.basis), $op(a.velocity, b.velocity))
   end    
 end
 
-for op ∈ (:*, :/)
-  @eval function Base.$op(a::Particle, x::Number)
-    return Particle(a.nuclude, $op(a.basis, x), $op(a.velocity, x))
-  end    
+function blend(particles, factors)
+  @assert length(particles) == length(factors)
+  b = blend(basis.(particles), factors)
+  nuclide = particles[1].nuclide
+  v = 0.0
+  for (p, f) in zip(particles, factors)
+    @assert p.nuclide == nuclide "blend can only act on particles with same nuclide"
+    v += p.velocity * f
+  end
+  return Particle(nuclide, b, v)
 end
+
+#for op ∈ (:*, :/)
+#  @eval function Base.$op(a::Particle, x::Number)
+#    return Particle(a.nuclide, $op(a.basis, x), $op(a.velocity, x))
+#  end
+#end
 
 
 function pushposition!(p::Particle, dt, bc::AbstractBC)

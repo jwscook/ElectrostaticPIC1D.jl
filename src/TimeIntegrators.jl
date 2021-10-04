@@ -38,40 +38,53 @@ end
   fieldcopy
 end
 
-function SemiImplicit2ndOrderTimeIntegrator(p::Plasma, f::AbstractField; maxiters=10, atol=0, rtol=sqrt(eps()))
-  return SemiImplicit2ndOrderTimeIntegrator(cellsize(f) / maxspeed(p), atol, rtol, maxiters, deepcopy(p))
+function SemiImplicit2ndOrderTimeIntegrator(p::Plasma, f::AbstractField;
+    cflmultiplier=1, maxiters=10, atol=0.0, rtol=sqrt(eps()))
+  return SemiImplicit2ndOrderTimeIntegrator(cellsize(f) / maxspeed(p) * cflmultiplier,
+    atol, rtol, maxiters, deepcopy(f))
 end
 
 timestep(ti::SemiImplicit2ndOrderTimeIntegrator) = ti.dt
 
-
-function (ti::SemiImplicit2ndOrderTimeIntegrator)(plasma, field, dt=nothing)
+function (ti::SemiImplicit2ndOrderTimeIntegrator)(plasma, field::AbstractField{BC}, dt=nothing
+    ) where {BC}
   isnothing(dt) && (dt = timestep(ti))
-  bc = BC(0.0, domainsize(field))
+  bc = BC(domainsize(field))
   copy!(ti.fieldcopy, field)
+  plasma0 = deepcopy(plasma) # TODO - figure out how to not use a copy
   firstiteration = true
+  iters = 0
   while firstiteration || iters < ti.maxiters
+    iters += 1
     firstiteration = false
+
     zero!(field.chargedensity)
-    for (i,s) ∈ enumerate(plasma.species)
-      for (j, particle) ∈ enumerate(s.particles)
-        p₀ = deepcopy(particle)
-        copy!(particle, p₀)
-        pushposition!(particle, dt/2, bc) # push half with starting velocity
-        pushvelocity!(particle, field, dt) # accelerate with middle velocity
-        pushposition!(particle, dt/2, bc) # now push other half timestep with end timestep velocity
-        deposit!(field, (p₀ + particle) / 2)
+
+    for (s0,s) ∈ zip(plasma0.species, plasma.species)
+      for (p0, particle) ∈ zip(s0.particles, s.particles)
+        v0 = particle.velocity
+        particle.velocity = (particle.velocity + p0.velocity) / 2 # set to half way velocity
+        particle.basis.centre = p0.basis.centre
+        pushposition!(particle, dt/2, bc)
+        deposit!(field, particle)
       end
     end
     solve!(field) # solve for the mid point electric field
-    if isapprox(field, fieldcopy, atol=ti.atol, rtol=ti.rtol) 
-      pushposition!(plasma, dt / 2, bc)
-      pushvelocity!(plasma, field, dt)
-      pushposition!(plasma, dt / 2, bc)
+    for (s0,s) ∈ zip(plasma0.species, plasma.species)
+      for (p0, particle) ∈ zip(s0.particles, s.particles)
+        E = electricfield(field, particle)
+        pushposition!(particle, dt/2, bc) # second half push
+        particle.velocity = p0.velocity
+        pushvelocity!(particle, E, dt) # accelerate with middle electricfield
+      end
+    end
+
+    if isapprox(field.chargedensity, ti.fieldcopy.chargedensity, atol=ti.atol, rtol=ti.rtol)
       break
     end
-    copy!(ti.fieldcopy, field)
+    copy!(ti.fieldcopy.chargedensity, field.chargedensity)
   end
   return nothing
 end
+
 

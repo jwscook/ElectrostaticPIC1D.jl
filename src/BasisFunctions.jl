@@ -70,6 +70,13 @@ mutable struct BasisFunction{S<:AbstractShape, T}
 end
 BasisFunction(s::AbstractShape, centre) = BasisFunction(s, centre, 0.0)
 
+function Base.copy!(a::BasisFunction{S, T}, b::BasisFunction{S,T}) where {S,T}
+  @assert a.shape == b.shape "copy! not intended for use between basisfunctions with non-like shapes"
+  a.centre = b.centre
+  a.weight = copy(b.weight)
+  return a
+end
+
 lower(b::BasisFunction) = b.centre - width(b.shape) / 2
 upper(b::BasisFunction) = b.centre + width(b.shape) / 2
 lower(a::BasisFunction, b::BasisFunction) = max(lower(a), lower(b))
@@ -94,6 +101,18 @@ function translate!(b::BasisFunction, x::Number, bc::AbstractBC)
   return b
 end
 Base.:+(b::BasisFunction, x) = (@assert isfinite(x); b.weight += x; b)
+
+
+function blend(basisfunctions::NTuple{N, BasisFunction{S, T}}, factors) where {N, S, T}
+  @assert N == length(factors)
+  c, w = 0.0, zero(T)
+  for (b, f) in zip(basisfunctions, factors)
+    c += b.centre * f
+    w += b.weight * f
+  end
+  return BasisFunction(basisfunctions[1].shape, c, w)
+end
+
 
 zero!(b::BasisFunction) = (b.weight *= false)
 function Base.in(x::Number, b::BasisFunction)
@@ -188,8 +207,8 @@ function integral(u::BasisFunction{TopHatShape}, v::BasisFunction{GaussianShape}
   return integral(v, u)
 end
 function integral(u::BasisFunction{GaussianShape}, v::BasisFunction{TopHatShape})
-  return (erf(-(u.centre - upper(v)) / u.shape.σ) -
-          erf(-(u.centre - lower(v)) / u.shape.σ)) / 2 / width(v)
+  return erf(-(u.centre - lower(v)) / u.shape.σ,
+             -(u.centre - upper(v)) / u.shape.σ) / 2 / width(v)
 end
 function integral(u::BasisFunction{TopHatShape},
                   v::BasisFunction{TopHatShape})

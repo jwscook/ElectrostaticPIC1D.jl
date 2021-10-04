@@ -32,7 +32,7 @@ export momentum, momentumdensity, energy, energydensity, charge, chargedensity
 include("Plasmas.jl")
 export Plasma, Species, positions, velocities
 include("TimeIntegrators.jl")
-export LeapFrogTimeIntegrator, LeapFrogTimeIntegrator
+export LeapFrogTimeIntegrator, LeapFrogTimeIntegrator, SemiImplicit2ndOrderTimeIntegrator
 include("Simulations.jl")
 export Simulation, SimulationParameters, run!, init!
 
