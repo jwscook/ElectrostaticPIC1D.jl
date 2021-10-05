@@ -100,7 +100,25 @@ function translate!(b::BasisFunction, x::Number, bc::AbstractBC)
   b.centre = bc(b.centre + x)
   return b
 end
-Base.:+(b::BasisFunction, x) = (@assert isfinite(x); b.weight += x; b)
+function Base.:+(b::BasisFunction, x)
+  @assert isfinite(x)
+  b.weight += x
+  return b
+end
+for op in (:-, :+)
+  @eval function Base.$op(a::BasisFunction, b::BasisFunction)
+    @assert centre(a) == centre(b)
+    a.weight = $op(a.weight, b.weight)
+    return a
+  end
+end
+function Base.isapprox(a::BasisFunction{S}, b::BasisFunction{S};
+    atol=0.0, rtol=sqrt(eps())) where {S}
+  @assert centre(a) == centre(b)
+  return isapprox(a.weight, b.weight, atol=atol, rtol=rtol)
+end
+
+Base.isfinite(b::BasisFunction) = isfinite(b.centre) && isfinite(b.weight)
 
 
 function blend(basisfunctions::NTuple{N, BasisFunction{S, T}}, factors) where {N, S, T}

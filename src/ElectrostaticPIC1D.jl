@@ -26,13 +26,15 @@ export EquispacedValueGrid, PeriodicGridBC
 export FourierField, FiniteDifferenceField, LSFEMField, GalerkinFEMField, FEMGrid
 export cellcentres, solve!, update!, cell, cells, cellsize, energydensity
 include("Particles.jl")
-export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!
+export AbstractParticle, Nuclide, Particle, pushposition!, pushvelocity!, position
 export velocity, charge, mass, deposit!, antideposit, integral, basis, electricfield
 export momentum, momentumdensity, energy, energydensity, charge, chargedensity
+export velocity!, position!
 include("Plasmas.jl")
 export Plasma, Species, positions, velocities
 include("TimeIntegrators.jl")
-export LeapFrogTimeIntegrator, LeapFrogTimeIntegrator, SemiImplicit2ndOrderTimeIntegrator
+export LeapFrogTimeIntegrator, SemiImplicit2ndOrderTimeIntegrator
+export SemiImplicitMidpointSingleLoopIntegrator, SemiImplicitYoshida4Integrator
 include("Simulations.jl")
 export Simulation, SimulationParameters, run!, init!
 

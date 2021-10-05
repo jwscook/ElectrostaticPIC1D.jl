@@ -16,6 +16,7 @@ mutable struct Particle{S<:AbstractShape} <: AbstractParticle
   nuclide::Nuclide
   basis::BasisFunction{S}
   velocity::Float64
+  work::Vector{Tuple{Float64,Float64,Float64}}
 end
 function Particle(n::Nuclide, shape::AbstractShape=DeltaFunctionShape();
     kwargstuple...) where {S<:AbstractShape}
@@ -27,12 +28,14 @@ function Particle(n::Nuclide, shape::AbstractShape=DeltaFunctionShape();
   velocity = get(kwargs, :velocity, 0.0)
   weight = get(kwargs, :weight, 0.0)
   basis = BasisFunction(shape, position, weight)
-  return Particle(n, basis, velocity)
+  return Particle(n, basis, velocity, Tuple{Float64,Float64,Float64}[])
 end
 
 velocity(p::Particle) = p.velocity
+velocity!(p::Particle, v) = (p.velocity = v)
 basis(p::Particle) = p.basis
 Base.position(p::Particle) = centre(p)
+position!(p::Particle, x) = (p.basis.centre = x)
 function Base.copy!(a::Particle{S}, b::Particle{S}) where {S}
   @assert a.nuclide == b.nuclide "copy! is not intended for use between species"
   a.velocity = b.velocity
