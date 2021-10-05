@@ -1,7 +1,7 @@
 using Distributed
 
-#addprocs(Sys.CPU_THREADS ÷ 2)
-addprocs(2)
+addprocs(Sys.CPU_THREADS ÷ 2)
+#addprocs(2)
 
 @everywhere using ElectrostaticPIC1D, FFTW, JLD2, Plots, Random, Test, ThreadsX
 @everywhere Random.seed!(0)
@@ -33,16 +33,16 @@ addprocs(2)
   Δ = L / NG
 
   particleshapes = ((DeltaFunctionShape(), "Delta"),
-                    (GaussianShape(Δ), "Gaussian"),
-                    (BSpline{0}(Δ), "BSpline0"),
-                    (BSpline{1}(Δ), "BSpline1"),
-                    (BSpline{2}(Δ), "BSpline2"),
+                    #(GaussianShape(Δ), "Gaussian"),
+                    #(BSpline{0}(Δ), "BSpline0"),
+                    #(BSpline{1}(Δ), "BSpline1"),
+                    #(BSpline{2}(Δ), "BSpline2"),
                     )
 
   fieldsolvers = ((FourierField(NG,L), "Fourier"),
-                  #(LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
-                  #(LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
-                  #(LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
+                  (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
+                  (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
+                  (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
                   #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                   #(FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                   #(FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
@@ -65,6 +65,13 @@ addprocs(2)
   #particleics[:Seeded] = (leftpositions*(1-p) + p*(asin.(2leftpositions-1)/π+0.5),
   #                        rightpositions*(1-p) - p*(asin.(2rightpositions-1)/π+0.5))
 
+  integrators = (
+                 #((p,f)->LeapFrogTimeIntegrator(p, f; cflmultiplier=1/7), "LeapFrog"),
+                 ((p,f)->SemiImplicit2ndOrderTimeIntegrator(p, f; cflmultiplier=1/7), "SemiImplicit2ndOrder"),
+                 ((p,f)->SemiImplicitYoshida4Integrator(p, f; cflmultiplier=1/7), "Yoshida"),
+                 ((p,f)->SemiImplicitMidpointSingleLoopIntegrator(p, f; cflmultiplier=1/7), "Midpoint1Loop"),
+                 )
+
   function innerloop(inputs)
 
     particleshape, particletypename = inputs[1]
@@ -74,8 +81,10 @@ addprocs(2)
     icname, particlepositions = inputs[3]
     xl, xr = particlepositions # x-left, x-right
 
-    run(`mkdir -p $datadir/$fieldtypename/$particletypename/$icname`)
-    stub = "$(datadir)/$(fieldtypename)/$(particletypename)/$(icname)/"
+    fintegrator, integratorname = inputs[4]
+
+    run(`mkdir -p $datadir/$fieldtypename/$particletypename/$icname/$integratorname/`)
+    stub = "$datadir/$fieldtypename/$particletypename/$icname/$integratorname/"
 
     left = Species([Particle(nuclide, particleshape; x=x, v=-v0, w=weight) for x in mod.(xl, L)])
     right = Species([Particle(nuclide, particleshape; x=x, v=v0, w=weight) for x in mod.(xr, L)])
@@ -84,10 +93,6 @@ addprocs(2)
 
     @assert length(plasma) == NS
     @assert L == v0 == 1.0 # to make things simple for this particular test
-
-    cfl = 2.1
-    #ti = LeapFrogTimeIntegrator(plasma, field; cflmultiplier=cfl)
-    ti = SemiImplicit2ndOrderTimeIntegrator(plasma, field; cflmultiplier=cfl, rtol=10eps())
 
     expectedenergy = weight * (mass(nuclide) * v0^2 / 2) * NP
     expectedmomentum = 0.0
@@ -98,9 +103,10 @@ addprocs(2)
     x = cellcentres(field)
     dryrunabort && return nothing
 
-    dde = Int(ceil(1 / cfl))
+    integrator = fintegrator(plasma, field)
+
     try
-      sim = Simulation(plasma, field, ti, diagnosticdumpevery=dde,
+      sim = Simulation(plasma, field, integrator, diagnosticdumpevery=10,
         endtime=15.0, filenamestub=stub)
 
       init!(sim) # set up to start
@@ -191,7 +197,7 @@ addprocs(2)
       @save stub * "dispersionrelation.jld2" Ex Rho times x L plasmafrequency
 
     catch e
-      @show fieldtypename, particletypename
+      @show stub
       @show e
       rethrow(e)
     end
@@ -199,9 +205,9 @@ addprocs(2)
     return nothing
   end
 
-  inputs = Iterators.product(particleshapes, fieldsolvers, particleics)
+  inputs = Iterators.product(particleshapes, fieldsolvers, particleics, integrators)
 
-  map(innerloop, inputs)
+  pmap(innerloop, inputs)
 
 end
 
