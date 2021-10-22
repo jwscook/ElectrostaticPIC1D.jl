@@ -52,7 +52,7 @@ function energytest(Shape)
   @test outcome
 end
 
-for S ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
+for S ∈ (BSpline{0}, BSpline{1}, BSpline{2}, BSpline{3}, GaussianShape)
  @testset "$S" begin
    isnormalisedtest(S)
    supporttest(S)
@@ -61,8 +61,8 @@ for S ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
 end
 
 @testset "Pairwise Integrals" begin
-for U ∈ (DeltaFunctionShape, BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
-for V ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
+for U ∈ (DeltaFunctionShape, BSpline{0}, BSpline{1}, BSpline{2}, BSpline{3}, GaussianShape)
+for V ∈ (BSpline{0}, BSpline{1}, BSpline{2}, BSpline{3}, GaussianShape)
 @testset "$U $V" begin
   noverlaps = 0
   while true
@@ -74,6 +74,9 @@ for V ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
     end
     expected = if U <: DeltaFunctionShape
       v(centre(u))
+    elseif ElectrostaticPIC1D.overlap(u, v)
+      quadgk(x-> u(x) * v(x), ElectrostaticPIC1D.knots(u, v)...,
+             order=51, atol=0, rtol=eps())[1]
     else
       quadgk(x-> u(x) * v(x), lower(u, v), upper(u, v);
              order=51, atol=0, rtol=eps())[1]
@@ -93,8 +96,20 @@ for V ∈ (BSpline{0}, BSpline{1}, BSpline{2}, GaussianShape)
       @test false
     end
     result = integral(u, v)
-    @test result ≈ expected atol=100eps()
-    break
+    @test result ≈ expected atol=0.0 rtol=10000eps()
+    if !ElectrostaticPIC1D.overlap(u, v)
+      @test result == expected == 0
+    elseif expected > 3eps()
+      @test result > 0
+      @test expected > 0
+    end
+    if !isapprox(result, expected, atol=100eps(), rtol=10000eps())
+      #@show u
+      #@show v
+      #@show result, expected
+      @show log10(abs((result - expected) / expected))
+    end
+    (noverlaps += 1) > 1000 && break
   end
 end # testset U, V
 end # V

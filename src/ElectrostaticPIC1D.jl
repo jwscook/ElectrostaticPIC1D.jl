@@ -35,6 +35,7 @@ export Plasma, Species, positions, velocities
 include("TimeIntegrators.jl")
 export LeapFrogTimeIntegrator, SemiImplicit2ndOrderTimeIntegrator
 export SemiImplicitMidpointSingleLoopIntegrator, SemiImplicitYoshida4Integrator
+export SemiImplicitSimpson13Integrator
 include("Simulations.jl")
 export Simulation, SimulationParameters, run!, init!
 

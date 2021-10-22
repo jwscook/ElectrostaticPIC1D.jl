@@ -10,6 +10,7 @@ struct FEMGrid{BC<:AbstractBC, S<:AbstractShape, T} <: AbstractGrid{BC, T}
     bc = BC(L)
     puw = 1 ./ [sum(v(centre(u), bc) for u ∈ bases) for v ∈ bases]
     @assert !any(iszero, puw)
+    @assert all(isfinite, puw)
 
     zero!.(bases)
 
@@ -108,13 +109,13 @@ function solve(A::AbstractMatrix, b::AbstractVector)
     end
     real.(ifft(o))
   elseif rank(Matrix(A)) == size(A, 1) # is non-singular
-    demean!(A \ b)
+    A \ b
   else
     u, v = eigen(Matrix(A))
     idu = 1 ./ u
     idu[end] *= false # just like ignoring 0th Fourier mode?
     A⁻¹ = real.(v * diagm(idu) * inv(v))
-    demean!(A⁻¹ * b)
+    A⁻¹ * b
   end
   @assert all(isfinite, x)
   return x

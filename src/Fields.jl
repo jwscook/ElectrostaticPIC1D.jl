@@ -1,6 +1,6 @@
 
 using ConcreteStructs, ForwardDiff, IterativeSolvers, JLD2, Lazy, LoopVectorization
-using Memoization, Preconditioners, QuadGK, SparseArrays, Base.Threads
+using Memoization, Preconditioners, QuadGK, SparseArrays, Statistics, Base.Threads
 using ThreadsX, ToeplitzMatrices
 
 abstract type AbstractGrid{BC,T} <: AbstractVector{T} end
@@ -28,7 +28,6 @@ domainsize(l::AbstractField) = l.chargedensity.L
 numberofunknowns(f::AbstractField) = numberofunknowns(f.chargedensity)
 
 function energy(f::AbstractField{BC}; rtol=100eps()) where {BC}
-  bc = BC(0.0, domainsize(f))
   return quadgk(x->f.electricfield(x)^2, 0, domainsize(f), rtol=rtol)[1] / 2
 end
 function charge(f::AbstractField{BC}) where {BC}

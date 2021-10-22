@@ -34,7 +34,7 @@ numtests = 10
 end
 
 @testset "FiniteDifference fields" begin
-  data = Dict(1=>[], 2=>[], 3=>[], 4=>[])
+  data = Dict(2=>[], 3=>[], 4=>[])
   for i in 1:8
     N, L, efield, rho, A = setup(N=2^(i+3), n=1)#, A=1)
     chargedensity = EquispacedValueGrid(N, L)
@@ -110,6 +110,14 @@ end
     @test p >= 1.99
   end
 
+  @testset "BSpline{2} BSpline{3}" begin
+    nrms, Ns = _dotest(GalerkinFEMField, BSpline{2}, BSpline{3}; verbose=false)
+    @show nrms
+    @show Ns
+    p = findpower(1 ./ Ns, nrms)
+    @test p >= 2.99
+  end
+
   end # Galerkin
 
   @testset "Least Squares" begin
@@ -142,6 +150,14 @@ end
     p = findpower(1 ./ Ns, nrms)
     @test p ≈ 2 rtol = 0.1
   end
+  @testset "Galerkin BSpline{2} BSpline{3}" begin
+    nrms, Ns = _dotest(GalerkinFEMField, x->BSpline{2}(x), x->BSpline{3}(x); verbose=false)
+    @show nrms
+    @show Ns
+    p = findpower(1 ./ Ns, nrms)
+    @test p ≈ 3 rtol = 0.1
+  end
+
   @testset "LSFEM BSpline{1}" begin
     nrms, Ns = _dotest(LSFEMField, x->BSpline{1}(x); verbose=false)
     p = findpower(1 ./ Ns, nrms)
@@ -152,6 +168,14 @@ end
     inds = Ns .< 1000
     p = findpower(1 ./ Ns[inds], nrms[inds])
     @test p > 2.9
+  end
+  @testset "LSFEM BSpline{3}" begin
+    nrms, Ns = _dotest(LSFEMField, x->BSpline{3}(x); verbose=false)
+    @show nrms
+    @show Ns
+    inds = Ns .< 1000
+    p = findpower(1 ./ Ns[inds], nrms[inds])
+    @test p > 3.9
   end
   @testset "LSFEM Gaussian" begin
     nrms, Ns = _dotest(LSFEMField, x->GaussianShape(x * √2), verbose=false)

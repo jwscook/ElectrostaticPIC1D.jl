@@ -1,4 +1,4 @@
-using FastGaussQuadrature, Memoization, SpecialFunctions
+using FastGaussQuadrature, Memoization, MuladdMacro, SpecialFunctions
 
 const RTOL = eps()
 
@@ -24,38 +24,34 @@ struct BSpline{N} <: AbstractShape
 end
 width(s::BSpline{N}) where N = (N + 1) * s.Δ
 
-function (s::BSpline{0})(x, centre)
-  return (-s.Δ/2 <= x - centre < s.Δ/2) / s.Δ
-end
 const TopHatShape = BSpline{0}
-
-function (s::BSpline{1})(x, centre)
-  z = 2 * (x - centre + 1 * s.Δ) / width(s) # z is between 0 and 2
-  value = if 0 <= z < 1
-    z
-  elseif 1 <= z < 2
-    (2 - z)
-  else
-    zero(z)
-  end
-  return value / s.Δ
-end
 const TentShape = BSpline{1}
-
-function (s::BSpline{2})(x, centre)
-  z = 3 * (x - centre + 1.5 * s.Δ) / width(s) # z is between 0 and 3
-  value = if 0 <= z < 1
-    z^2 / 2
-  elseif 1 <= z < 2
-    3/4 - (1.5 - z)^2
-  elseif 2 <= z < 3
-    (3 - z)^2 / 2
-  else
-    zero(z)
-  end
-  return value / s.Δ
-end
 const QuadraticBSplineShape = BSpline{2}
+const CubicBSplineShape = BSpline{3}
+
+(b::BSpline{N})(x, centre) where {N} = b((x - centre + width(b) / 2))
+(b::BSpline{N})(x) where {N} = deboor(Unsigned(N), b.Δ, x) / b.Δ
+
+@inline function deboor(degree::Unsigned, knots, x::Number; j::Integer=1)
+  @assert length(knots) >= j + degree + 1
+  return @inbounds if degree == 0
+    knots[j] <= x < knots[j + 1] ? 1 : 0
+  else
+    @muladd (x - knots[j]) / (knots[j + degree] - knots[j]) * deboor(degree - 1, knots, x; j=j) +
+    (knots[j + 1 + degree] - x) / (knots[j + 1 + degree] - knots[j + 1]) * deboor(degree - 1, knots, x; j=j + 1)
+  end
+end
+
+@inline function deboor(d::Unsigned, t::Number, x::Number; j::Integer=1)
+  ti = t * (j - 1)
+  return if d == 0
+    ti <= x < ti + t ? 1 : 0
+  else
+    td = t * d
+    @muladd ((x - ti) * deboor(d - 1, t, x; j=j) + (ti + t + td - x) * deboor(d - 1, t, x; j=j + 1)) / td
+  end
+end
+
 
 knots(b::BSpline{N}) where N = 0:1/(N + 1):1
 
@@ -100,8 +96,9 @@ function translate!(b::BasisFunction, x::Number, bc::AbstractBC)
   b.centre = bc(b.centre + x)
   return b
 end
+
 function Base.:+(b::BasisFunction, x)
-  @assert isfinite(x)
+  @assert isfinite(x) "x is $x"
   b.weight += x
   return b
 end
@@ -125,8 +122,8 @@ function blend(basisfunctions::NTuple{N, BasisFunction{S, T}}, factors) where {N
   @assert N == length(factors)
   c, w = 0.0, zero(T)
   for (b, f) in zip(basisfunctions, factors)
-    c += b.centre * f
-    w += b.weight * f
+    @muladd c = c + b.centre * f
+    @muladd w = w + b.weight * f
   end
   return BasisFunction(basisfunctions[1].shape, c, w)
 end
@@ -138,7 +135,7 @@ function Base.in(x::Number, b::BasisFunction)
 end
 
 function knots(a::BasisFunction, b::BasisFunction)
-  overlap(a, b) || return output
+  @assert overlap(a, b)
   ka = knots(a)
   kb = knots(b)
   lo = max(ka[1], kb[1])
@@ -182,7 +179,7 @@ end
 function integral(b::BasisFunction, f::F, _::AbstractBC) where {F}
   ks = knots(b)
   return mapreduce(i->
-    QuadGK.quadgk(x->b(x) * f(x), ks[i], ks[i+1]; order=7, atol=eps(), rtol=RTOL)[1],
+    QuadGK.quadgk(x->b(x) * f(x), ks[i], ks[i+1]; order=11, atol=eps(), rtol=RTOL)[1],
     +, 1:length(ks)-1)
 end
 
@@ -208,22 +205,14 @@ function integral(u::BasisFunction{BSpline{N1}}, v::BasisFunction{BSpline{N2}}
   end
   return output
 end
-function integral(u::BasisFunction{GaussianShape, T1},
-                  v::BasisFunction{BSpline{N}, T2}) where {T1, N, T2}
-  ks = knots(v)
+function integral(u::BasisFunction{<:AbstractShape, T1},
+                  v::BasisFunction{<:AbstractShape, T2}) where {T1, T2}
+  ks = knots(u, v)
   return mapreduce(i->
-    QuadGK.quadgk(x->u(x) * v(x), ks[i], ks[i+1]; order=7, atol=eps(), rtol=RTOL)[1],
+    QuadGK.quadgk(x->u(x) * v(x), ks[i], ks[i+1]; order=11, atol=eps(), rtol=RTOL)[1],
     +, 1:length(ks)-1)
 end
-function integral(u::BasisFunction{BSpline{N}, T1},
-                  v::BasisFunction{GaussianShape, T2}) where {N, T1, T2}
-  return integral(v, u)
-end
 
-
-function integral(u::BasisFunction{TopHatShape}, v::BasisFunction{GaussianShape})
-  return integral(v, u)
-end
 function integral(u::BasisFunction{GaussianShape}, v::BasisFunction{TopHatShape})
   return erf(-(u.centre - lower(v)) / u.shape.σ,
              -(u.centre - upper(v)) / u.shape.σ) / 2 / width(v)
@@ -251,7 +240,7 @@ function integral(a::BasisFunction{GaussianShape}, b::BasisFunction{TentShape})
   μ = centre(a)
   Δ = b.shape.Δ
   c = centre(b)
-  foo(l, m) = (σ * exp(-(m - l)^2/σ^2)/√π + m * erf((m - l)/σ)) / 2Δ^2
+  foo(l, m) = @muladd (σ * exp(-(m - l)^2/σ^2)/√π + m * erf((m - l)/σ)) / 2Δ^2
   return foo(0, μ - c + Δ) - foo(Δ, μ - c + Δ) +
     foo(0, μ - c - Δ) - foo(-Δ, μ - c - Δ)
 end

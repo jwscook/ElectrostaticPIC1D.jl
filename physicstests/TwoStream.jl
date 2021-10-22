@@ -6,7 +6,7 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 @everywhere using ElectrostaticPIC1D, FFTW, JLD2, Plots, Random, Test, ThreadsX
 @everywhere Random.seed!(0)
 
-@everywhere function go(;NG=64, NPPCPS=16, L=1.0, nvortexpergrid=1,
+@everywhere function go(;NG=32, NPPCPS=8, L=1.0, nvortexpergrid=1,
     cleandatadir=true, dryrunabort=false, datadir="data")
 #  NG = 64 # number of grid points
 #  NPPCPS = 16 # number of particles per cell per species
@@ -33,16 +33,18 @@ addprocs(Sys.CPU_THREADS ÷ 2)
   Δ = L / NG
 
   particleshapes = ((DeltaFunctionShape(), "Delta"),
-                    #(GaussianShape(Δ), "Gaussian"),
-                    #(BSpline{0}(Δ), "BSpline0"),
-                    #(BSpline{1}(Δ), "BSpline1"),
-                    #(BSpline{2}(Δ), "BSpline2"),
+                    (GaussianShape(Δ), "Gaussian"),
+                    (BSpline{0}(Δ), "BSpline0"),
+                    (BSpline{1}(Δ), "BSpline1"),
+                    (BSpline{2}(Δ), "BSpline2"),
+                    (BSpline{3}(Δ), "BSpline3"),
                     )
 
   fieldsolvers = ((FourierField(NG,L), "Fourier"),
                   (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
                   (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
-                  (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
+                  (LSFEMField(NG,L,BSpline{3}(Δ)), "LSFEM_BSpline3"),
+                  #(LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
                   #(GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
                   #(FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
                   #(FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
@@ -56,7 +58,7 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 
   #particleics[:Quiet] = deepcopy((leftpositions, rightpositions))
 
-  budge(x) = x + (rand() - 0.5) * Δ / NPPCPS / 10;
+  budge(x) = x + (rand() - 0.5) * Δ / NPPCPS / 100;
 
   particleics[:Muffled] = deepcopy((budge.(leftpositions), budge.(rightpositions)))
 
@@ -66,10 +68,11 @@ addprocs(Sys.CPU_THREADS ÷ 2)
   #                        rightpositions*(1-p) - p*(asin.(2rightpositions-1)/π+0.5))
 
   integrators = (
-                 #((p,f)->LeapFrogTimeIntegrator(p, f; cflmultiplier=1/7), "LeapFrog"),
-                 ((p,f)->SemiImplicit2ndOrderTimeIntegrator(p, f; cflmultiplier=1/7), "SemiImplicit2ndOrder"),
-                 ((p,f)->SemiImplicitYoshida4Integrator(p, f; cflmultiplier=1/7), "Yoshida"),
-                 ((p,f)->SemiImplicitMidpointSingleLoopIntegrator(p, f; cflmultiplier=1/7), "Midpoint1Loop"),
+                 #((p,f)->LeapFrogTimeIntegrator(p, f; cflmultiplier=1/5), "LeapFrog"),
+                 #((p,f)->SemiImplicitSimpson13Integrator(p, f; cflmultiplier=1/5), "Simpson"),
+                 #((p,f)->SemiImplicit2ndOrderTimeIntegrator(p, f; cflmultiplier=1/5), "SemiImplicit2ndOrder"),
+                 #((p,f)->SemiImplicitYoshida4Integrator(p, f; cflmultiplier=1/5), "Yoshida"),
+                 ((p,f)->SemiImplicitMidpointSingleLoopIntegrator(p, f; cflmultiplier=1/5), "Midpoint1Loop"),
                  )
 
   function innerloop(inputs)
@@ -107,7 +110,7 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 
     try
       sim = Simulation(plasma, field, integrator, diagnosticdumpevery=10,
-        endtime=15.0, filenamestub=stub)
+        endtime=7.5, filenamestub=stub)
 
       init!(sim) # set up to start
       @time run!(sim)
@@ -212,5 +215,5 @@ addprocs(Sys.CPU_THREADS ÷ 2)
 end
 
 @testset "Simulations" begin
-  go(; datadir="data_twostream_implicit")
+  go(; datadir="data_twostream_implicit_asdfagdasg")
 end

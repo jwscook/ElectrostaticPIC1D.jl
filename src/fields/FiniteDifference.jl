@@ -46,6 +46,7 @@ function integratepoly(y, a, b) # TODO calculate coefficients and not do this
   return sum(coeffs .* b.^(0:N)) - sum(coeffs .* a.^(0:N))
 end
 function (p::PeriodicFiniteIntegratorOperator{1})(z, y)
+  @error "PeriodicFiniteIntegratorOperator{1} is too inaccurate for use"
   z[1] = y[1]/2 * p.Δ
   for i ∈ 2:length(z)
     z[i] = z[i-1] + y[i] * p.Δ

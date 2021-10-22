@@ -34,6 +34,8 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
     particleshapes = ((BSpline{0}(Δ), "BSpline0"),
                       (BSpline{1}(Δ), "BSpline1"),
                       (BSpline{2}(Δ), "BSpline2"),
+                      (BSpline{3}(Δ), "BSpline3"),
+                      (BSpline{4}(Δ), "BSpline4"),
                       (DeltaFunctionShape(), "Delta"),
                       (GaussianShape(Δ), "Gaussian"),)
     for (particleshape, pname) ∈ particleshapes
@@ -58,16 +60,20 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
     particleshapes = ((BSpline{0}(Δ), "BSpline0"),
                       (BSpline{1}(Δ), "BSpline1"),
                       (BSpline{2}(Δ), "BSpline2"),
+                      (BSpline{3}(Δ), "BSpline2"),
                       (DeltaFunctionShape(), "Delta"),
-                      (GaussianShape(Δ), "Gaussian"),)
+                      (GaussianShape(Δ), "Gaussian"),
+                      )
 
     fieldsolvers = (
       (FourierField(NG,L), "Fourier"),
       (LSFEMField(NG,L,BSpline{1}(Δ)), "LSFEM_BSpline1"),
       (LSFEMField(NG,L,BSpline{2}(Δ)), "LSFEM_BSpline2"),
+      (LSFEMField(NG,L,BSpline{3}(Δ)), "LSFEM_BSpline3"),
       (LSFEMField(NG,L,GaussianShape(Δ * √2)), "LSFEM_Gaussian"),
       (GalerkinFEMField(NG,L,BSpline{1}(Δ), BSpline{2}(Δ)), "Galerkin_BSpline1_BSpline2"),
-      (FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
+      (GalerkinFEMField(NG,L,BSpline{2}(Δ), BSpline{3}(Δ)), "Galerkin_BSpline2_BSpline3"),
+      #(FiniteDifferenceField(NG,L,order=1), "FiniteDifference1"),
       (FiniteDifferenceField(NG,L,order=2), "FiniteDifference2"),
       (FiniteDifferenceField(NG,L,order=4), "FiniteDifference4"),
       )
@@ -86,6 +92,7 @@ using ElectrostaticPIC1D, QuadGK, Random, Statistics, Test; Random.seed!(0)
 
       species = Species([Particle(nuclide, particleshape; x=x, v=0.0,
         w=weightfun(x)) for x in xs])
+      @assert !any(p->isnan(weight(p)), species)
 
       expectedoverallchargedensity = ρ0
       totalweight = sum(ElectrostaticPIC1D.weight.(species))
